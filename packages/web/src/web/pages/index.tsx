@@ -9,6 +9,7 @@ function AuthGate({ children }: { children: React.ReactNode }) {
   const [pw, setPw] = useState('');
   const [err, setErr] = useState('');
   const [busy, setBusy] = useState(false);
+  const [showPw, setShowPw] = useState(false);
 
   useEffect(() => {
     const token = localStorage.getItem(TOKEN_KEY);
@@ -76,19 +77,32 @@ function AuthGate({ children }: { children: React.ReactNode }) {
           <div style={{ color: '#e2e2f0', fontSize: 18, fontWeight: 700, letterSpacing: 1, marginBottom: 6 }}>ACCESS REQUIRED</div>
           <div style={{ color: '#6b7280', fontSize: 11, marginBottom: 24 }}>Enter your access code to continue</div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-            <input
-              type="password"
-              value={pw}
-              onChange={e => setPw(e.target.value)}
-              onKeyDown={e => e.key === 'Enter' && login()}
-              placeholder="Access code"
-              style={{
-                fontFamily: "'JetBrains Mono', monospace",
-                background: '#0a0a0f', border: '1px solid #1e1e2e',
-                color: '#e2e2f0', fontSize: 13, padding: '10px 12px',
-                outline: 'none', borderRadius: 2, width: '100%', boxSizing: 'border-box',
-              }}
-            />
+            <div style={{ position: 'relative', width: '100%' }}>
+              <input
+                type={showPw ? 'text' : 'password'}
+                value={pw}
+                onChange={e => setPw(e.target.value)}
+                onKeyDown={e => e.key === 'Enter' && login()}
+                placeholder="Access code"
+                style={{
+                  fontFamily: "'JetBrains Mono', monospace",
+                  background: '#0a0a0f', border: '1px solid #1e1e2e',
+                  color: '#e2e2f0', fontSize: 13, padding: '10px 40px 10px 12px',
+                  outline: 'none', borderRadius: 2, width: '100%', boxSizing: 'border-box',
+                }}
+              />
+              <button
+                type="button"
+                onClick={() => setShowPw(s => !s)}
+                style={{
+                  position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)',
+                  background: 'none', border: 'none', cursor: 'pointer',
+                  color: '#6b7280', padding: 0, lineHeight: 1, fontSize: 14,
+                }}
+              >
+                {showPw ? '🙈' : '👁'}
+              </button>
+            </div>
             {err && <div style={{ color: '#ef4444', fontSize: 11 }}>✕ {err}</div>}
             <button
               onClick={login}
