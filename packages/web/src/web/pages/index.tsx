@@ -359,6 +359,14 @@ export default function Index() {
               priceColor={T.text}
               countdown={htfCandles.length > 0 ? htfCountdown : null}
               countdownTheme={T}
+              mobileControls={isMobile ? (<>
+                <MiniBtn T={T} label="SGL" active={htfMode === 'single'} onClick={() => setHtfMode(m => m === 'single' ? 'full' : 'single')} />
+                {htfMode === 'single' && <MiniBtn T={T} label="LIVE" active={showLiveCandle} color={T.bull} onClick={() => setShowLiveCandle(v => !v)} />}
+                <MiniBtn T={T} label="SESS" active={overlays.sessions} color="#00cc77" onClick={() => toggleOverlay('sessions')} />
+                <MiniBtn T={T} label="FVG" active={overlays.fvg} color={T.bull} onClick={() => toggleOverlay('fvg')} />
+                <MiniBtn T={T} label="MSS" active={overlays.mss} color={T.mss} onClick={() => toggleOverlay('mss')} />
+                <MiniBtn T={T} label="SWP" active={overlays.sweep} color={T.sweep} onClick={() => toggleOverlay('sweep')} />
+              </>) : undefined}
             />
             <div style={{ flex: 1, minHeight: 0, position: 'relative' }}>
               {htfLoading && <LoadingOverlay T={T} />}
@@ -559,6 +567,25 @@ function ToggleBtn({ T, label, active, onClick, color }: {
   );
 }
 
+function MiniBtn({ T, label, active, onClick, color }: {
+  T: Theme; label: string; active: boolean; onClick: () => void; color?: string;
+}) {
+  const c = color || T.neutral;
+  return (
+    <button onClick={onClick} style={{
+      background: active ? `${c}22` : 'transparent',
+      border: `1px solid ${active ? c : T.border}`,
+      color: active ? c : T.label,
+      fontFamily: "'JetBrains Mono', monospace",
+      fontSize: 9, padding: '1px 4px',
+      cursor: 'pointer', letterSpacing: 0.3, whiteSpace: 'nowrap',
+      lineHeight: 1.4,
+    }}>
+      {label}
+    </button>
+  );
+}
+
 function Label({ T, children }: { T: Theme; children: React.ReactNode }) {
   return <span style={{ color: T.label, fontSize: 10, flexShrink: 0 }}>{children}</span>;
 }
@@ -567,10 +594,11 @@ function Divider({ T }: { T: Theme }) {
   return <div style={{ width: 1, height: 16, background: T.border, flexShrink: 0 }} />;
 }
 
-function PanelHeader({ T, title, subtitle, loading, price, priceColor, countdown, countdownTheme }: {
+function PanelHeader({ T, title, subtitle, loading, price, priceColor, countdown, countdownTheme, mobileControls }: {
   T: Theme; title: string; subtitle: string; loading: boolean;
   price?: number | null; priceColor?: string;
   countdown?: number | null; countdownTheme?: Theme;
+  mobileControls?: React.ReactNode;
 }) {
   const ct = countdownTheme ?? T;
   const cdColor = countdown != null
@@ -581,25 +609,27 @@ function PanelHeader({ T, title, subtitle, loading, price, priceColor, countdown
     <div style={{
       height: 28, borderBottom: `1px solid ${T.border}`,
       display: 'flex', alignItems: 'center',
-      padding: '0 10px', gap: 8, flexShrink: 0, background: T.surface,
+      padding: '0 8px', gap: 6, flexShrink: 0, background: T.surface,
     }}>
       <span style={{ color: T.text, fontSize: 11, fontWeight: 600 }}>{title}</span>
       <span style={{ color: T.label, fontSize: 10 }}>{subtitle}</span>
       {price != null && (
-        <span style={{ marginLeft: 4, color: priceColor ?? T.text, fontSize: 11, fontWeight: 700, letterSpacing: 0.5 }}>
+        <span style={{ marginLeft: 2, color: priceColor ?? T.text, fontSize: 11, fontWeight: 700, letterSpacing: 0.5 }}>
           {price > 1000 ? price.toFixed(2) : price > 10 ? price.toFixed(3) : price.toFixed(4)}
         </span>
       )}
-      {loading && <span style={{ color: T.neutral, fontSize: 10, marginLeft: 'auto' }}>LOADING...</span>}
-      {/* Countdown — right side of panel header, always visible */}
+      {/* Mobile quick-toggles */}
+      {mobileControls && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginLeft: 4 }}>
+          {mobileControls}
+        </div>
+      )}
+      <div style={{ flex: 1 }} />
+      {loading && <span style={{ color: T.neutral, fontSize: 10 }}>LOADING...</span>}
       {countdown != null && !loading && (
         <span style={{
-          marginLeft: loading ? 0 : 'auto',
-          color: cdColor,
-          fontSize: 10,
-          fontWeight: 600,
-          letterSpacing: 1,
-          fontFamily: "'JetBrains Mono', monospace",
+          color: cdColor, fontSize: 10, fontWeight: 600,
+          letterSpacing: 1, fontFamily: "'JetBrains Mono', monospace",
         }}>
           {fmtCountdown(countdown)}
         </span>
