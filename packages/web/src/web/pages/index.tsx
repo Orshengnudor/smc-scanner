@@ -102,6 +102,7 @@ export default function Index() {
   const [htfGranularity, setHtfGranularity] = useState<number>(() => lsGet('smc_htf', DEFAULT_HTF));
   const [ltfGranularity, setLtfGranularity] = useState<number>(() => lsGet('smc_ltf', DEFAULT_LTF));
   const [htfMode, setHtfMode] = useState<HTFMode>(() => lsGet('smc_htfMode', 'full' as HTFMode));
+  const [showLiveCandle, setShowLiveCandle] = useState<boolean>(() => lsGet('smc_showLive', false));
   const [showHtfPrice, setShowHtfPrice] = useState<boolean>(() => lsGet('smc_showPrice', true));
   const [overlays, setOverlays] = useState<OverlayToggles>(() => lsGet('smc_overlays', {
     crtLevels: true, fvg: true, sweep: true, mss: true, grid: true, crossLines: true, sessions: true,
@@ -113,6 +114,7 @@ export default function Index() {
   useEffect(() => { lsSet('smc_htf',       htfGranularity); }, [htfGranularity]);
   useEffect(() => { lsSet('smc_ltf',       ltfGranularity); }, [ltfGranularity]);
   useEffect(() => { lsSet('smc_htfMode',   htfMode); }, [htfMode]);
+  useEffect(() => { lsSet('smc_showLive',  showLiveCandle); }, [showLiveCandle]);
   useEffect(() => { lsSet('smc_showPrice', showHtfPrice); }, [showHtfPrice]);
   useEffect(() => { lsSet('smc_overlays',  overlays); }, [overlays]);
   useEffect(() => { lsSet('smc_lines',     drawnLines); }, [drawnLines]);
@@ -186,10 +188,14 @@ export default function Index() {
   // HTF display candles
   const htfDisplayCandles = useMemo(() => {
     if (htfMode === 'single') {
-      return htfCandles.length >= 2 ? htfCandles.slice(-2, -1) : htfCandles.slice(-1);
+      if (htfCandles.length >= 2) {
+        // last closed candle + optionally the live forming candle
+        return showLiveCandle ? htfCandles.slice(-2) : htfCandles.slice(-2, -1);
+      }
+      return htfCandles.slice(-1);
     }
     return htfCandles;
-  }, [htfCandles, htfMode]);
+  }, [htfCandles, htfMode, showLiveCandle]);
 
   // LTF display
   const ltfCandlesPerHTF = Math.max(1, Math.round(htfGranularity / ltfGranularity));
@@ -271,6 +277,10 @@ export default function Index() {
 
         <ToggleBtn T={T} label="SINGLE" active={htfMode === 'single'}
           onClick={() => setHtfMode(m => m === 'single' ? 'full' : 'single')} />
+        {htfMode === 'single' && (
+          <ToggleBtn T={T} label="LIVE" active={showLiveCandle} color={T.bull}
+            onClick={() => setShowLiveCandle(v => !v)} />
+        )}
         <Divider T={T} />
 
         <Label T={T}>SHOW</Label>
@@ -332,7 +342,7 @@ export default function Index() {
           <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0, borderRight: `1px solid ${T.border}` }}>
             <PanelHeader T={T}
               title={htfLabel}
-              subtitle={htfMode === 'single' ? 'LAST CLOSED' : 'HTF'}
+              subtitle={htfMode === 'single' ? (showLiveCandle ? 'CLOSED + LIVE' : 'LAST CLOSED') : 'HTF'}
               loading={htfLoading}
               price={showHtfPrice ? displayHtfPrice : null}
               priceColor={T.text}
