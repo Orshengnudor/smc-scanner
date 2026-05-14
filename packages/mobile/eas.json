@@ -1,0 +1,21 @@
+{
+  "build": {
+    "development": {
+      "developmentClient": true,
+      "distribution": "internal",
+      "env": {
+        "EXPO_PUBLIC_DERIV_TOKEN": "pat_29c0a0865c965084b15b052b8d2e9e8b549ffd261f563e7128b64588fed47a28"
+      }
+    },
+    "preview": {
+      "env": {
+        "EXPO_PUBLIC_DERIV_TOKEN": "pat_29c0a0865c965084b15b052b8d2e9e8b549ffd261f563e7128b64588fed47a28"
+      }
+    },
+    "production": {
+      "env": {
+        "EXPO_PUBLIC_DERIV_TOKEN": "pat_29c0a0865c965084b15b052b8d2e9e8b549ffd261f563e7128b64588fed47a28"
+      }
+    }
+  }
+}
