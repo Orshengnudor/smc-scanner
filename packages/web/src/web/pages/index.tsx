@@ -1,4 +1,118 @@
 import { useState, useMemo, useEffect, useRef, useCallback } from 'react';
+
+// ── Auth gate ──────────────────────────────────────────────────────────────
+const AUTH_URL = 'https://smc-auth.vercel.app';
+const TOKEN_KEY = 'smc_auth_token';
+
+function AuthGate({ children }: { children: React.ReactNode }) {
+  const [status, setStatus] = useState<'loading' | 'ok' | 'locked'>('loading');
+  const [pw, setPw] = useState('');
+  const [err, setErr] = useState('');
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    const token = localStorage.getItem(TOKEN_KEY);
+    if (!token) { setStatus('locked'); return; }
+    fetch(`${AUTH_URL}/api/check`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ token }),
+    })
+      .then(r => r.json())
+      .then((d: { valid: boolean }) => {
+        if (d.valid) setStatus('ok');
+        else { localStorage.removeItem(TOKEN_KEY); setStatus('locked'); }
+      })
+      .catch(() => { localStorage.removeItem(TOKEN_KEY); setStatus('locked'); });
+  }, []);
+
+  const login = async () => {
+    if (!pw) return;
+    setBusy(true); setErr('');
+    try {
+      const res = await fetch(`${AUTH_URL}/api/verify`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password: pw }),
+      });
+      if (res.ok) {
+        const d = await res.json() as { token: string };
+        localStorage.setItem(TOKEN_KEY, d.token);
+        setStatus('ok');
+      } else {
+        setErr('Invalid access code');
+      }
+    } catch {
+      setErr('Connection error');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  if (status === 'loading') {
+    return (
+      <div style={{
+        minHeight: '100vh', background: '#0a0a0f', display: 'flex',
+        alignItems: 'center', justifyContent: 'center',
+        fontFamily: "'JetBrains Mono', monospace", color: '#6b7280', fontSize: 11,
+      }}>
+        Authenticating...
+      </div>
+    );
+  }
+
+  if (status === 'locked') {
+    return (
+      <div style={{
+        minHeight: '100vh', background: '#0a0a0f', display: 'flex',
+        alignItems: 'center', justifyContent: 'center', padding: 24,
+      }}>
+        <div style={{
+          width: '100%', maxWidth: 360,
+          border: '1px solid #1e1e2e', background: '#12121a', padding: 32,
+          fontFamily: "'JetBrains Mono', monospace",
+        }}>
+          <div style={{ color: '#818cf8', fontSize: 11, letterSpacing: 2, marginBottom: 8 }}>SMC SCANNER</div>
+          <div style={{ color: '#e2e2f0', fontSize: 18, fontWeight: 700, letterSpacing: 1, marginBottom: 6 }}>ACCESS REQUIRED</div>
+          <div style={{ color: '#6b7280', fontSize: 11, marginBottom: 24 }}>Enter your access code to continue</div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+            <input
+              type="password"
+              value={pw}
+              onChange={e => setPw(e.target.value)}
+              onKeyDown={e => e.key === 'Enter' && login()}
+              placeholder="Access code"
+              style={{
+                fontFamily: "'JetBrains Mono', monospace",
+                background: '#0a0a0f', border: '1px solid #1e1e2e',
+                color: '#e2e2f0', fontSize: 13, padding: '10px 12px',
+                outline: 'none', borderRadius: 2, width: '100%', boxSizing: 'border-box',
+              }}
+            />
+            {err && <div style={{ color: '#ef4444', fontSize: 11 }}>✕ {err}</div>}
+            <button
+              onClick={login}
+              disabled={busy || !pw}
+              style={{
+                fontFamily: "'JetBrains Mono', monospace",
+                background: '#818cf8', border: '1px solid #818cf8',
+                color: '#fff', fontSize: 11, padding: '10px 16px',
+                cursor: busy ? 'not-allowed' : 'pointer',
+                letterSpacing: 1, textTransform: 'uppercase',
+                opacity: busy || !pw ? 0.5 : 1, borderRadius: 2,
+              }}
+            >
+              {busy ? 'Verifying...' : 'Enter'}
+            </button>
+          </div>
+          <div style={{ color: '#6b7280', fontSize: 10, marginTop: 20 }}>Contact admin for access</div>
+        </div>
+      </div>
+    );
+  }
+
+  return <>{children}</>;
+}
 import CandleChart, { type OverlayToggles, type DrawnLine, type Theme } from '../components/CandleChart';
 import SetupPanel, { type AlertEntry } from '../components/SetupPanel';
 import AlertBanner from '../components/AlertBanner';
@@ -93,7 +207,7 @@ function lsSet(key: string, val: unknown) {
   try { localStorage.setItem(key, JSON.stringify(val)); } catch {}
 }
 
-export default function Index() {
+function Scanner() {
   const { connected } = useConnection(DERIV_TOKEN);
 
   // ── Persisted state ────────────────────────────────────────────────────────
@@ -528,6 +642,10 @@ export default function Index() {
       <AlertBanner status={setupStatus} onNewAlert={handleNewAlert} />
     </div>
   );
+}
+
+export default function Index() {
+  return <AuthGate><Scanner /></AuthGate>;
 }
 
 // ── Sub-components ────────────────────────────────────────────────────────────
