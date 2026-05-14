@@ -458,13 +458,16 @@ const CandleChart = forwardRef<ChartHandle, Props>(({
     const chart = chartRef.current; const series = seriesRef.current;
     if (!chart || !series || candles.length === 0) return;
 
-    overlaySeriesRef.current.forEach(s => { try { chart.removeSeries(s); } catch {} });
+    // Remove existing overlay series one by one, clear ref immediately
+    const toRemove = [...overlaySeriesRef.current];
     overlaySeriesRef.current = [];
+    toRemove.forEach(s => { try { chart.removeSeries(s); } catch {} });
 
     const extentCandles = candles;
     const firstTime = extentCandles[0].time;
     const lastTime  = extentCandles[extentCandles.length - 1].time;
 
+    try {
     if (extentCandles.length >= 2) {
       if (overlays.crtLevels && crtLevel) {
         const crtStart = Math.max(crtLevel.time, firstTime);
@@ -528,6 +531,7 @@ const CandleChart = forwardRef<ChartHandle, Props>(({
     } else {
       try { createSeriesMarkers(series, []); } catch {}
     }
+    } catch (e) { console.warn('overlay render error', e); }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [candles, fvgs, sweeps, mssEvents, crtLevel,
       overlays.crtLevels, overlays.fvg, overlays.sweep, overlays.mss,
