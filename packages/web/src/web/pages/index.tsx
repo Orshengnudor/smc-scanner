@@ -347,10 +347,10 @@ export default function Index() {
       {/* ── Main ────────────────────────────────────────────────── */}
       <div style={{ flex: 1, display: 'flex', overflow: 'hidden', minHeight: 0 }}>
 
-        <div style={{ flex: 1, display: 'flex', flexDirection: 'row', minWidth: 0, overflow: 'hidden' }}>
+        <div style={{ flex: 1, display: 'flex', flexDirection: isMobile ? 'column' : 'row', minWidth: 0, overflow: 'hidden' }}>
 
           {/* HTF */}
-          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0, borderRight: `1px solid ${T.border}` }}>
+          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0, [isMobile ? 'borderBottom' : 'borderRight']: `1px solid ${T.border}` }}>
             <PanelHeader T={T}
               title={htfLabel}
               subtitle={htfMode === 'single' ? (showLiveCandle ? 'CLOSED + LIVE' : 'LAST CLOSED') : 'HTF'}
