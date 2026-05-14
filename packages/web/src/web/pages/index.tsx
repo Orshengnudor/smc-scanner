@@ -125,7 +125,18 @@ export default function Index() {
   const [settings, setSettings] = useState<ScannerSettings>(DEFAULT_SETTINGS);
   const [showSettings, setShowSettings] = useState(false);
   const [alertLog, setAlertLog] = useState<AlertEntry[]>([]);
-  const [scannerOpen, setScannerOpen] = useState(true);
+  const [scannerOpen, setScannerOpen] = useState(() => window.innerWidth >= 768);
+  const [isMobile, setIsMobile] = useState(() => window.innerWidth < 768);
+
+  useEffect(() => {
+    const onResize = () => {
+      const mobile = window.innerWidth < 768;
+      setIsMobile(mobile);
+      if (mobile) setScannerOpen(false);
+    };
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
+  }, []);
   const [drawMode, setDrawMode] = useState(false);
   const [lineColorIdx, setLineColorIdx] = useState(0);
 
@@ -413,19 +424,50 @@ export default function Index() {
           </div>
         </div>
 
-        {/* Scanner sidebar */}
+        {/* Scanner sidebar — overlay on mobile, inline on desktop */}
         {scannerOpen && (
-          <div style={{
-            width: 196, borderLeft: `1px solid ${T.border}`,
-            flexShrink: 0, display: 'flex', flexDirection: 'column',
-            background: T.surface, overflow: 'hidden',
-          }}>
-            <SetupPanel
-              status={setupStatus}
-              loading={ltfLoading || htfLoading}
-              alertLog={alertLog}
-            />
-          </div>
+          <>
+            {/* Mobile backdrop */}
+            {isMobile && (
+              <div
+                onClick={() => setScannerOpen(false)}
+                style={{
+                  position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)',
+                  zIndex: 999,
+                }}
+              />
+            )}
+            <div style={isMobile ? {
+              position: 'fixed', top: 0, right: 0, bottom: 0,
+              width: 220, zIndex: 1000,
+              display: 'flex', flexDirection: 'column',
+              background: T.surface, borderLeft: `1px solid ${T.border}`,
+              boxShadow: '-4px 0 20px rgba(0,0,0,0.4)',
+              overflow: 'hidden',
+            } : {
+              width: 196, borderLeft: `1px solid ${T.border}`,
+              flexShrink: 0, display: 'flex', flexDirection: 'column',
+              background: T.surface, overflow: 'hidden',
+            }}>
+              {/* Mobile close button */}
+              {isMobile && (
+                <button
+                  onClick={() => setScannerOpen(false)}
+                  style={{
+                    alignSelf: 'flex-end', margin: '8px 8px 0',
+                    background: 'transparent', border: 'none',
+                    color: T.text, fontSize: 18, cursor: 'pointer', lineHeight: 1,
+                    padding: '4px 8px',
+                  }}
+                >✕</button>
+              )}
+              <SetupPanel
+                status={setupStatus}
+                loading={ltfLoading || htfLoading}
+                alertLog={alertLog}
+              />
+            </div>
+          </>
         )}
       </div>
 
