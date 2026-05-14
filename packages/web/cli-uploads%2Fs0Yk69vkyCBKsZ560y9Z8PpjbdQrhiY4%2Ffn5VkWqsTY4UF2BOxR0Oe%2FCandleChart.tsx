@@ -1,4 +1,4 @@
-import { useEffect, useRef, useImperativeHandle, forwardRef, useCallback, useState } from 'react';
+import { useEffect, useRef, useImperativeHandle, forwardRef, useCallback } from 'react';
 import {
   createChart,
   CandlestickSeries,
@@ -21,7 +21,6 @@ export type OverlayToggles = {
   mss: boolean;
   grid: boolean;
   crossLines: boolean;
-  sessions: boolean;
 };
 
 export type DrawnLine = {
@@ -48,17 +47,8 @@ export type Theme = {
   grid: string;
 };
 
-// ── Trading sessions (UTC hours) ──────────────────────────────────────────────
-const SESSIONS = [
-  { name: 'Sydney',   startH: 21, startM: 0, endH: 6,  endM: 0,  color: 'rgba(100,160,255,0.10)', border: 'rgba(100,160,255,0.45)' },
-  { name: 'Tokyo',    startH: 0,  startM: 0, endH: 9,  endM: 0,  color: 'rgba(255,200,50,0.09)',  border: 'rgba(255,200,50,0.45)'  },
-  { name: 'London',   startH: 7,  startM: 0, endH: 16, endM: 0,  color: 'rgba(0,220,100,0.10)',   border: 'rgba(0,220,100,0.50)'   },
-  { name: 'New York', startH: 12, startM: 0, endH: 21, endM: 0,  color: 'rgba(255,80,80,0.09)',   border: 'rgba(255,80,80,0.45)'   },
-] as const;
-
 type Props = {
   candles: Candle[];
-
   fvgs?: FVG[];
   sweeps?: LiquiditySweep[];
   mssEvents?: MSS[];
@@ -66,9 +56,7 @@ type Props = {
   overlays: OverlayToggles;
   height?: number;
   theme: Theme;
-  granularity: number;
   onCrosshairMove?: (time: number | null, price: number | null) => void;
-  onCountdownChange?: (secs: number) => void;
   drawnLines?: DrawnLine[];
   onLinesChange?: (lines: DrawnLine[]) => void;
   drawMode?: boolean;
@@ -84,6 +72,7 @@ function safeLineData(t1: number, t2: number, value: number): LineData[] | null 
   return [{ time: t1 as any, value }, { time: t2 as any, value }];
 }
 
+/** Distance from point (px, py) to segment (x1,y1)-(x2,y2) */
 function distToSegment(px: number, py: number, x1: number, y1: number, x2: number, y2: number): number {
   const dx = x2 - x1, dy = y2 - y1;
   const lenSq = dx * dx + dy * dy;
@@ -92,74 +81,10 @@ function distToSegment(px: number, py: number, x1: number, y1: number, x2: numbe
   return Math.hypot(px - (x1 + t * dx), py - (y1 + t * dy));
 }
 
-const HIT_RADIUS = 8;
-
-/**
- * Given the visible time range, generate session bands as pixel x-ranges.
- */
-function getSessionBands(
-  chart: IChartApi,
-  canvasWidth: number,
-  canvasHeight: number,
-  visibleRange: { from: number; to: number } | null,
-): Array<{ x1: number; x2: number; color: string; border: string; name: string }> {
-  if (!visibleRange) return [];
-
-  const bands: Array<{ x1: number; x2: number; color: string; border: string; name: string }> = [];
-  const DAY = 86400;
-
-  const fromDay = Math.floor(visibleRange.from / DAY) * DAY;
-  const toDay   = Math.ceil(visibleRange.to / DAY) * DAY;
-
-  for (const sess of SESSIONS) {
-    const startSec = sess.startH * 3600 + sess.startM * 60;
-    const endSec   = sess.endH   * 3600 + sess.endM   * 60;
-    const crossesMidnight = endSec <= startSec;
-
-    for (let day = fromDay; day <= toDay; day += DAY) {
-      let segStart: number, segEnd: number;
-
-      if (crossesMidnight) {
-        // Part 1: start → midnight
-        segStart = day + startSec;
-        segEnd   = day + DAY;
-        const x1a = chart.timeScale().timeToCoordinate(segStart as any);
-        const x2a = chart.timeScale().timeToCoordinate(segEnd as any);
-        if (x1a != null && x2a != null) {
-          const left = Math.min(x1a, x2a); const right = Math.max(x1a, x2a);
-          if (right > 0 && left < canvasWidth)
-            bands.push({ x1: left, x2: right, color: sess.color, border: sess.border, name: sess.name });
-        }
-        // Part 2: midnight → end
-        segStart = day + DAY;
-        segEnd   = day + DAY + endSec;
-        const x1b = chart.timeScale().timeToCoordinate(segStart as any);
-        const x2b = chart.timeScale().timeToCoordinate(segEnd as any);
-        if (x1b != null && x2b != null) {
-          const left = Math.min(x1b, x2b); const right = Math.max(x1b, x2b);
-          if (right > 0 && left < canvasWidth)
-            bands.push({ x1: left, x2: right, color: sess.color, border: sess.border, name: sess.name });
-        }
-      } else {
-        segStart = day + startSec;
-        segEnd   = day + endSec;
-        const x1 = chart.timeScale().timeToCoordinate(segStart as any);
-        const x2 = chart.timeScale().timeToCoordinate(segEnd as any);
-        if (x1 != null && x2 != null) {
-          const left = Math.min(x1, x2); const right = Math.max(x1, x2);
-          if (right > 0 && left < canvasWidth)
-            bands.push({ x1: left, x2: right, color: sess.color, border: sess.border, name: sess.name });
-        }
-      }
-    }
-  }
-
-  return bands;
-}
+const HIT_RADIUS = 6; // px
 
 const CandleChart = forwardRef<ChartHandle, Props>(({
   candles,
-
   fvgs = [],
   sweeps = [],
   mssEvents = [],
@@ -167,69 +92,50 @@ const CandleChart = forwardRef<ChartHandle, Props>(({
   overlays,
   height = 400,
   theme,
-  granularity,
   onCrosshairMove,
-  onCountdownChange,
   drawnLines = [],
   onLinesChange,
   drawMode = false,
   drawColor = '#f5c518',
 }, ref) => {
-  const containerRef  = useRef<HTMLDivElement>(null);
-  const chartDivRef   = useRef<HTMLDivElement>(null);
-  const canvasRef     = useRef<HTMLCanvasElement>(null);
-  const chartRef      = useRef<IChartApi | null>(null);
-  const seriesRef     = useRef<ISeriesApi<'Candlestick'> | null>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const chartRef = useRef<IChartApi | null>(null);
+  const seriesRef = useRef<ISeriesApi<'Candlestick'> | null>(null);
   const overlaySeriesRef = useRef<ISeriesApi<'Line'>[]>([]);
-  const visibleRangeRef  = useRef<{ from: number; to: number } | null>(null);
+  const lastPriceRef = useRef<number | null>(null);
 
-  // Drawing state
+  // Drawing state (mutable, not React state — avoids re-renders during drag)
   const drawStateRef = useRef<{
-    drawing: boolean;
+    drawing: boolean;        // currently dragging new line
     startX: number; startY: number;
     curX: number; curY: number;
-    draggingId: string | null;
-    dragOffsetX: number; dragOffsetY: number;
-    dragLine: DrawnLine | null;
+    draggingId: string | null; // id of line being repositioned
+    dragOffsetX: number; dragOffsetY: number; // offset from line midpoint at drag start
+    dragLine: DrawnLine | null; // snapshot of line being dragged
   }>({
     drawing: false, startX: 0, startY: 0, curX: 0, curY: 0,
     draggingId: null, dragOffsetX: 0, dragOffsetY: 0, dragLine: null,
   });
 
-  const linesRef          = useRef<DrawnLine[]>(drawnLines);
-  const onLinesChangeRef  = useRef(onLinesChange);
-  const onCountdownRef    = useRef(onCountdownChange);
-  const drawModeRef       = useRef(drawMode);
-  const drawColorRef      = useRef(drawColor);
-  const overlaysRef       = useRef(overlays);
-
-  useEffect(() => { linesRef.current         = drawnLines; }, [drawnLines]);
+  // Keep latest drawnLines + callbacks accessible in canvas event handlers without stale closures
+  const linesRef = useRef<DrawnLine[]>(drawnLines);
+  const onLinesChangeRef = useRef(onLinesChange);
+  const drawModeRef = useRef(drawMode);
+  const drawColorRef = useRef(drawColor);
+  useEffect(() => { linesRef.current = drawnLines; }, [drawnLines]);
   useEffect(() => { onLinesChangeRef.current = onLinesChange; }, [onLinesChange]);
-  useEffect(() => { onCountdownRef.current   = onCountdownChange; }, [onCountdownChange]);
-  useEffect(() => { drawModeRef.current      = drawMode; }, [drawMode]);
-  useEffect(() => { drawColorRef.current     = drawColor; }, [drawColor]);
-  useEffect(() => { overlaysRef.current      = overlays; }, [overlays]);
+  useEffect(() => { drawModeRef.current = drawMode; }, [drawMode]);
+  useEffect(() => { drawColorRef.current = drawColor; }, [drawColor]);
 
   useImperativeHandle(ref, () => ({
     syncCrosshair: (_time: number | null, _price: number | null) => {},
   }));
 
-  // ── Countdown — bubble up to parent ───────────────────────────────────────
-  useEffect(() => {
-    if (candles.length === 0) { onCountdownRef.current?.(0); return; }
-    const nextCandleTime = candles[candles.length - 1].time + granularity;
-    const tick = () => {
-      const secs = Math.max(0, nextCandleTime - Math.floor(Date.now() / 1000));
-      onCountdownRef.current?.(secs);
-    };
-    tick();
-    const id = setInterval(tick, 1000);
-    return () => clearInterval(id);
-  }, [candles, granularity]);
-
-  // ── Canvas converters ──────────────────────────────────────────────────────
-  const lineToPixels = useCallback((line: DrawnLine) => {
-    const chart = chartRef.current; const series = seriesRef.current;
+  // ── Canvas: line-to-pixel and pixel-to-line converters ────────────────────
+  const lineToPixels = useCallback((line: DrawnLine): { x1: number; y1: number; x2: number; y2: number } | null => {
+    const chart = chartRef.current;
+    const series = seriesRef.current;
     if (!chart || !series) return null;
     const x1 = chart.timeScale().timeToCoordinate(line.time1 as any);
     const y1 = series.priceToCoordinate(line.price1);
@@ -240,7 +146,8 @@ const CandleChart = forwardRef<ChartHandle, Props>(({
   }, []);
 
   const pixelsToLine = useCallback((x1: number, y1: number, x2: number, y2: number, color: string, id?: string): DrawnLine | null => {
-    const chart = chartRef.current; const series = seriesRef.current;
+    const chart = chartRef.current;
+    const series = seriesRef.current;
     if (!chart || !series) return null;
     const t1 = chart.timeScale().coordinateToTime(x1);
     const p1 = series.coordinateToPrice(y1);
@@ -249,11 +156,13 @@ const CandleChart = forwardRef<ChartHandle, Props>(({
     if (t1 == null || p1 == null || t2 == null || p2 == null) return null;
     return {
       id: id ?? `line-${Date.now()}-${Math.random().toString(36).slice(2)}`,
-      time1: Number(t1), price1: p1, time2: Number(t2), price2: p2, color,
+      time1: Number(t1), price1: p1,
+      time2: Number(t2), price2: p2,
+      color,
     };
   }, []);
 
-  // ── Canvas redraw ─────────────────────────────────────────────────────────
+  // ── Canvas redraw ──────────────────────────────────────────────────────────
   const redrawCanvas = useCallback(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -261,60 +170,56 @@ const CandleChart = forwardRef<ChartHandle, Props>(({
     if (!ctx) return;
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-    const chart = chartRef.current;
-    const ds    = drawStateRef.current;
+    const ds = drawStateRef.current;
+
+    // Draw committed lines
     const lines = linesRef.current;
-    const ovl   = overlaysRef.current;
-
-    // Session bands
-    if (chart && ovl.sessions) {
-      const bands = getSessionBands(chart, canvas.width, canvas.height, visibleRangeRef.current);
-      for (const band of bands) {
-        const x1 = Math.max(0, band.x1);
-        const x2 = Math.min(canvas.width, band.x2);
-        if (x2 <= x1) continue;
-        ctx.save();
-        ctx.fillStyle = band.color;
-        ctx.fillRect(x1, 0, x2 - x1, canvas.height);
-        ctx.strokeStyle = band.border;
-        ctx.lineWidth = 1;
-        ctx.setLineDash([3, 3]);
-        ctx.beginPath(); ctx.moveTo(x1, 0); ctx.lineTo(x1, canvas.height); ctx.stroke();
-        ctx.restore();
-      }
-    }
-
-    // Drawn lines
     for (const line of lines) {
       const px = lineToPixels(line);
       if (!px) continue;
-      const isDragging = ds.draggingId === line.id;
       ctx.save();
       ctx.strokeStyle = line.color;
-      ctx.lineWidth = isDragging ? 2.5 : 1.5;
+      ctx.lineWidth = 1.5;
       ctx.setLineDash([]);
-      if (isDragging) { ctx.shadowColor = line.color; ctx.shadowBlur = 8; }
-      ctx.beginPath(); ctx.moveTo(px.x1, px.y1); ctx.lineTo(px.x2, px.y2); ctx.stroke();
+      // Highlight if being dragged
+      if (ds.draggingId === line.id) {
+        ctx.lineWidth = 2.5;
+        ctx.shadowColor = line.color;
+        ctx.shadowBlur = 6;
+      }
+      ctx.beginPath();
+      ctx.moveTo(px.x1, px.y1);
+      ctx.lineTo(px.x2, px.y2);
+      ctx.stroke();
       ctx.restore();
+
+      // Endpoint handles
       ctx.save();
       ctx.fillStyle = line.color;
-      for (const { x, y } of [{ x: px.x1, y: px.y1 }, { x: px.x2, y: px.y2 }]) {
-        ctx.beginPath(); ctx.arc(x, y, 4, 0, Math.PI * 2); ctx.fill();
-      }
+      ctx.beginPath();
+      ctx.arc(px.x1, px.y1, 3, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.beginPath();
+      ctx.arc(px.x2, px.y2, 3, 0, Math.PI * 2);
+      ctx.fill();
       ctx.restore();
     }
 
-    // In-progress preview
+    // Draw in-progress line (preview)
     if (ds.drawing) {
       ctx.save();
       ctx.strokeStyle = drawColorRef.current;
       ctx.lineWidth = 1.5;
-      ctx.setLineDash([5, 4]);
-      ctx.beginPath(); ctx.moveTo(ds.startX, ds.startY); ctx.lineTo(ds.curX, ds.curY); ctx.stroke();
+      ctx.setLineDash([4, 4]);
+      ctx.beginPath();
+      ctx.moveTo(ds.startX, ds.startY);
+      ctx.lineTo(ds.curX, ds.curY);
+      ctx.stroke();
       ctx.restore();
     }
   }, [lineToPixels]);
 
+  // ── Resize canvas to match container ──────────────────────────────────────
   const syncCanvasSize = useCallback(() => {
     const canvas = canvasRef.current;
     const container = containerRef.current;
@@ -329,9 +234,10 @@ const CandleChart = forwardRef<ChartHandle, Props>(({
 
   // ── Init chart ─────────────────────────────────────────────────────────────
   useEffect(() => {
-    if (!chartDivRef.current) return;
-    const chart = createChart(chartDivRef.current, {
-      width: chartDivRef.current.clientWidth,
+    if (!containerRef.current) return;
+
+    const chart = createChart(containerRef.current, {
+      width: containerRef.current.clientWidth,
       height,
       layout: {
         background: { color: theme.bg },
@@ -340,8 +246,8 @@ const CandleChart = forwardRef<ChartHandle, Props>(({
         fontSize: 10,
       },
       grid: {
-        vertLines: { color: overlays.grid ? theme.grid : 'transparent', style: LineStyle.Solid },
-        horzLines: { color: overlays.grid ? theme.grid : 'transparent', style: LineStyle.Solid },
+        vertLines: { color: overlays.grid ? theme.grid : 'transparent', style: LineStyle.Dotted },
+        horzLines: { color: overlays.grid ? theme.grid : 'transparent', style: LineStyle.Dotted },
       },
       crosshair: {
         mode: CrosshairMode.Normal,
@@ -353,45 +259,42 @@ const CandleChart = forwardRef<ChartHandle, Props>(({
     });
 
     const series = chart.addSeries(CandlestickSeries, {
-      upColor: theme.bull, downColor: theme.bear,
-      borderUpColor: theme.bull, borderDownColor: theme.bear,
-      wickUpColor: theme.bull, wickDownColor: theme.bear,
+      upColor: theme.bull,
+      downColor: theme.bear,
+      borderUpColor: theme.bull,
+      borderDownColor: theme.bear,
+      wickUpColor: theme.bull,
+      wickDownColor: theme.bear,
     });
 
-    chartRef.current  = chart;
+    chartRef.current = chart;
     seriesRef.current = series;
 
     chart.subscribeCrosshairMove((param) => {
-      let price: number | null = null;
-      if (param.point?.y != null) price = series.coordinateToPrice(param.point.y);
-      if (price == null && param.seriesData) {
+      if (param.seriesData) {
         const d = param.seriesData.get(series) as any;
-        if (d) price = d.close ?? d.value ?? null;
+        if (d) lastPriceRef.current = d.close ?? d.value ?? null;
       }
-      onCrosshairMove?.(param.time ? Number(param.time) : null, price);
+      if (onCrosshairMove) {
+        const t = param.time ? Number(param.time) : null;
+        onCrosshairMove(t, lastPriceRef.current);
+      }
     });
 
-    chart.timeScale().subscribeVisibleTimeRangeChange((range) => {
-      visibleRangeRef.current = range ? { from: Number(range.from), to: Number(range.to) } : null;
-      syncCanvasSize();
-      redrawCanvas();
-    });
-
-    requestAnimationFrame(() => {
-      const r = chart.timeScale().getVisibleRange();
-      if (r) visibleRangeRef.current = { from: Number(r.from), to: Number(r.to) };
+    // Redraw canvas lines whenever chart pans/zooms
+    chart.timeScale().subscribeVisibleTimeRangeChange(() => {
       syncCanvasSize();
       redrawCanvas();
     });
 
     const ro = new ResizeObserver(() => {
-      if (chartDivRef.current) {
-        chart.applyOptions({ width: chartDivRef.current.clientWidth });
+      if (containerRef.current) {
+        chart.applyOptions({ width: containerRef.current.clientWidth });
         syncCanvasSize();
         redrawCanvas();
       }
     });
-    ro.observe(chartDivRef.current);
+    ro.observe(containerRef.current);
 
     return () => {
       ro.disconnect();
@@ -424,60 +327,52 @@ const CandleChart = forwardRef<ChartHandle, Props>(({
   useEffect(() => {
     chartRef.current?.applyOptions({
       grid: {
-        vertLines: { color: overlays.grid ? theme.grid : 'transparent', style: LineStyle.Solid },
-        horzLines: { color: overlays.grid ? theme.grid : 'transparent', style: LineStyle.Solid },
+        vertLines: { color: overlays.grid ? theme.grid : 'transparent', style: LineStyle.Dotted },
+        horzLines: { color: overlays.grid ? theme.grid : 'transparent', style: LineStyle.Dotted },
       },
     });
   }, [overlays.grid, theme.grid]);
 
-  // ── Sessions toggle ────────────────────────────────────────────────────────
-  useEffect(() => {
-    syncCanvasSize();
-    redrawCanvas();
-  }, [overlays.sessions, redrawCanvas, syncCanvasSize]);
-
   // ── Candles ────────────────────────────────────────────────────────────────
   useEffect(() => {
-    const chart = chartRef.current;
-    if (!seriesRef.current || !chart || candles.length === 0) return;
+    if (!seriesRef.current || candles.length === 0) return;
     const data: CandlestickData[] = candles.map(c => ({
-      time: c.time as any, open: c.open, high: c.high, low: c.low, close: c.close,
+      time: c.time as any,
+      open: c.open, high: c.high, low: c.low, close: c.close,
     }));
     seriesRef.current.setData(data);
-
-    requestAnimationFrame(() => {
-      const r = chart.timeScale().getVisibleRange();
-      if (r) visibleRangeRef.current = { from: Number(r.from), to: Number(r.to) };
-      syncCanvasSize();
-      redrawCanvas();
-    });
-  }, [candles, redrawCanvas, syncCanvasSize]);
+    // After new data, redraw canvas (price scale may shift)
+    setTimeout(() => redrawCanvas(), 0);
+  }, [candles, redrawCanvas]);
 
   // ── SMC Overlays ───────────────────────────────────────────────────────────
   useEffect(() => {
-    const chart = chartRef.current; const series = seriesRef.current;
+    const chart = chartRef.current;
+    const series = seriesRef.current;
     if (!chart || !series || candles.length === 0) return;
 
+    const canDrawLines = candles.length >= 2;
     overlaySeriesRef.current.forEach(s => { try { chart.removeSeries(s); } catch {} });
     overlaySeriesRef.current = [];
 
-    const extentCandles = candles;
-    const firstTime = extentCandles[0].time;
-    const lastTime  = extentCandles[extentCandles.length - 1].time;
+    if (canDrawLines) {
+      const firstTime = candles[0].time;
+      const lastTime = candles[candles.length - 1].time;
 
-    if (extentCandles.length >= 2) {
       if (overlays.crtLevels && crtLevel) {
         const crtStart = Math.max(crtLevel.time, firstTime);
-        [
+        const defs = [
           { price: crtLevel.high,  color: theme.bull, label: 'H' },
           { price: crtLevel.close, color: theme.crt,  label: 'C' },
-          { price: crtLevel.low,   color: theme.bear, label: 'L' },
-        ].forEach(({ price, color, label }) => {
+          { price: crtLevel.low,   color: theme.bear,  label: 'L' },
+        ];
+        defs.forEach(({ price, color, label }) => {
           const pts = safeLineData(crtStart, lastTime, price);
           if (!pts) return;
           const s = chart.addSeries(LineSeries, {
             color, lineWidth: 1, lineStyle: LineStyle.Dashed,
-            priceLineVisible: false, lastValueVisible: false, crosshairMarkerVisible: false, title: label,
+            priceLineVisible: false, lastValueVisible: false,
+            crosshairMarkerVisible: false, title: label,
           });
           s.setData(pts);
           overlaySeriesRef.current.push(s);
@@ -491,20 +386,23 @@ const CandleChart = forwardRef<ChartHandle, Props>(({
           const topPts = safeLineData(fvgStart, lastTime, fvg.top);
           const botPts = safeLineData(fvgStart, lastTime, fvg.bottom);
           if (!topPts || !botPts) return;
-          [topPts, botPts].forEach(pts => {
+          const mkLine = (pts: LineData[]) => {
             const s = chart.addSeries(LineSeries, {
               color: color + '55', lineWidth: 1, lineStyle: LineStyle.Dotted,
               priceLineVisible: false, lastValueVisible: false, crosshairMarkerVisible: false,
             });
             s.setData(pts);
             overlaySeriesRef.current.push(s);
-          });
+          };
+          mkLine(topPts);
+          mkLine(botPts);
         });
       }
 
       if (overlays.sweep) {
         sweeps.slice(-5).forEach(sw => {
-          const pts = safeLineData(Math.max(sw.time, firstTime), lastTime, sw.level);
+          const swStart = Math.max(sw.time, firstTime);
+          const pts = safeLineData(swStart, lastTime, sw.level);
           if (!pts) return;
           const s = chart.addSeries(LineSeries, {
             color: theme.sweep, lineWidth: 1, lineStyle: LineStyle.Dashed,
@@ -522,7 +420,8 @@ const CandleChart = forwardRef<ChartHandle, Props>(({
         position: (m.type === 'bullish' ? 'belowBar' : 'aboveBar') as any,
         color: theme.mss,
         shape: (m.type === 'bullish' ? 'arrowUp' : 'arrowDown') as any,
-        text: m.kind, size: 1,
+        text: m.kind,
+        size: 1,
       }));
       try { createSeriesMarkers(series, markers); } catch {}
     } else {
@@ -533,7 +432,7 @@ const CandleChart = forwardRef<ChartHandle, Props>(({
       overlays.crtLevels, overlays.fvg, overlays.sweep, overlays.mss,
       theme.bull, theme.bear, theme.crt, theme.sweep, theme.mss]);
 
-  // ── Redraw when drawnLines/drawMode change ────────────────────────────────
+  // ── Redraw canvas whenever drawnLines or drawMode changes ─────────────────
   useEffect(() => {
     syncCanvasSize();
     redrawCanvas();
@@ -549,25 +448,30 @@ const CandleChart = forwardRef<ChartHandle, Props>(({
     if (!drawModeRef.current) return;
     const { x, y } = getCanvasPos(e);
     const ds = drawStateRef.current;
+    const lines = linesRef.current;
 
-    for (let i = linesRef.current.length - 1; i >= 0; i--) {
-      const line = linesRef.current[i];
+    // Check if clicking near an existing line → drag it
+    for (let i = lines.length - 1; i >= 0; i--) {
+      const line = lines[i];
       const px = lineToPixels(line);
       if (!px) continue;
-      if (distToSegment(x, y, px.x1, px.y1, px.x2, px.y2) <= HIT_RADIUS) {
-        ds.draggingId   = line.id;
-        ds.dragOffsetX  = x - (px.x1 + px.x2) / 2;
-        ds.dragOffsetY  = y - (px.y1 + px.y2) / 2;
-        ds.dragLine     = { ...line };
+      const dist = distToSegment(x, y, px.x1, px.y1, px.x2, px.y2);
+      if (dist <= HIT_RADIUS) {
+        const midX = (px.x1 + px.x2) / 2;
+        const midY = (px.y1 + px.y2) / 2;
+        ds.draggingId = line.id;
+        ds.dragOffsetX = x - midX;
+        ds.dragOffsetY = y - midY;
+        ds.dragLine = { ...line };
         e.preventDefault();
-        redrawCanvas();
         return;
       }
     }
 
+    // Start new line
     ds.drawing = true;
     ds.startX = x; ds.startY = y;
-    ds.curX   = x; ds.curY   = y;
+    ds.curX = x;   ds.curY = y;
     redrawCanvas();
   }, [lineToPixels, redrawCanvas]);
 
@@ -577,15 +481,22 @@ const CandleChart = forwardRef<ChartHandle, Props>(({
     const ds = drawStateRef.current;
 
     if (ds.draggingId && ds.dragLine) {
-      const px = lineToPixels(ds.dragLine);
+      // Move entire line
+      const line = ds.dragLine;
+      const px = lineToPixels(line);
       if (px) {
-        const halfDx = (px.x2 - px.x1) / 2;
-        const halfDy = (px.y2 - px.y1) / 2;
-        const midX   = x - ds.dragOffsetX;
-        const midY   = y - ds.dragOffsetY;
-        const newLine = pixelsToLine(midX - halfDx, midY - halfDy, midX + halfDx, midY + halfDy, ds.dragLine.color, ds.dragLine.id);
+        const dx = (px.x2 - px.x1) / 2;
+        const dy = (px.y2 - px.y1) / 2;
+        const newMidX = x - ds.dragOffsetX;
+        const newMidY = y - ds.dragOffsetY;
+        const newPx = {
+          x1: newMidX - dx, y1: newMidY - dy,
+          x2: newMidX + dx, y2: newMidY + dy,
+        };
+        const newLine = pixelsToLine(newPx.x1, newPx.y1, newPx.x2, newPx.y2, line.color, line.id);
         if (newLine) {
-          linesRef.current = linesRef.current.map(l => l.id === ds.dragLine!.id ? newLine : l);
+          // Update linesRef live for smooth redraw without triggering React re-render mid-drag
+          linesRef.current = linesRef.current.map(l => l.id === line.id ? newLine : l);
           redrawCanvas();
         }
       }
@@ -601,12 +512,16 @@ const CandleChart = forwardRef<ChartHandle, Props>(({
     const ds = drawStateRef.current;
 
     if (ds.draggingId) {
+      // Commit drag result
       onLinesChangeRef.current?.([...linesRef.current]);
-      ds.draggingId = null; ds.dragLine = null;
+      ds.draggingId = null;
+      ds.dragLine = null;
       redrawCanvas();
     } else if (ds.drawing) {
       ds.drawing = false;
-      if (Math.hypot(x - ds.startX, y - ds.startY) >= 4) {
+      // Only commit if dragged at least a few pixels (not an accidental click)
+      const dist = Math.hypot(x - ds.startX, y - ds.startY);
+      if (dist >= 3) {
         const newLine = pixelsToLine(ds.startX, ds.startY, x, y, drawColorRef.current);
         if (newLine) {
           const updated = [...linesRef.current, newLine];
@@ -619,26 +534,33 @@ const CandleChart = forwardRef<ChartHandle, Props>(({
   }, [pixelsToLine, redrawCanvas]);
 
   const handleMouseLeave = useCallback(() => {
-    if (drawStateRef.current.drawing) {
-      drawStateRef.current.drawing = false;
+    const ds = drawStateRef.current;
+    if (ds.drawing) {
+      ds.drawing = false;
       redrawCanvas();
     }
   }, [redrawCanvas]);
 
+  // Cursor style for canvas
+  const getCanvasCursor = () => {
+    if (!drawMode) return 'default';
+    return 'crosshair';
+  };
+
   return (
     <div
       ref={containerRef}
-      style={{ width: '100%', height, position: 'relative', overflow: 'hidden' }}
+      style={{ width: '100%', height, position: 'relative' }}
     >
-      <div ref={chartDivRef} style={{ width: '100%', height: '100%' }} />
-
+      {/* lightweight-charts mounts here — pointer-events blocked by canvas when drawMode */}
       <canvas
         ref={canvasRef}
         style={{
-          position: 'absolute', top: 0, left: 0,
+          position: 'absolute',
+          top: 0, left: 0,
           width: '100%', height: '100%',
           pointerEvents: drawMode ? 'all' : 'none',
-          cursor: drawMode ? 'crosshair' : 'default',
+          cursor: getCanvasCursor(),
           zIndex: 10,
         }}
         onMouseDown={handleMouseDown}
@@ -646,28 +568,6 @@ const CandleChart = forwardRef<ChartHandle, Props>(({
         onMouseUp={handleMouseUp}
         onMouseLeave={handleMouseLeave}
       />
-
-      {/* Session legend */}
-      {overlays.sessions && (
-        <div style={{
-          position: 'absolute', top: 6, left: 8, zIndex: 20,
-          display: 'flex', gap: 6, pointerEvents: 'none',
-        }}>
-          {SESSIONS.map(s => (
-            <div key={s.name} style={{
-              display: 'flex', alignItems: 'center', gap: 3,
-              background: 'rgba(0,0,0,0.50)',
-              border: `1px solid ${s.border}`,
-              borderRadius: 3, padding: '1px 5px',
-              fontFamily: "'JetBrains Mono', monospace",
-              fontSize: 9, color: s.border, letterSpacing: 0.5,
-            }}>
-              <div style={{ width: 7, height: 7, borderRadius: 1, background: s.color, border: `1px solid ${s.border}` }} />
-              {s.name}
-            </div>
-          ))}
-        </div>
-      )}
     </div>
   );
 });

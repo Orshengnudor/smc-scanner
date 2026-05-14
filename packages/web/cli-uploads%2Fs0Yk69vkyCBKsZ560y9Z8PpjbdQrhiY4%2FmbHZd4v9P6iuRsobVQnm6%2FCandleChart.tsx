@@ -49,16 +49,16 @@ export type Theme = {
 };
 
 // ── Trading sessions (UTC hours) ──────────────────────────────────────────────
+// Each session: { name, startH, startM, endH, endM, color (rgba) }
 const SESSIONS = [
-  { name: 'Sydney',   startH: 21, startM: 0, endH: 6,  endM: 0,  color: 'rgba(100,160,255,0.10)', border: 'rgba(100,160,255,0.45)' },
-  { name: 'Tokyo',    startH: 0,  startM: 0, endH: 9,  endM: 0,  color: 'rgba(255,200,50,0.09)',  border: 'rgba(255,200,50,0.45)'  },
-  { name: 'London',   startH: 7,  startM: 0, endH: 16, endM: 0,  color: 'rgba(0,220,100,0.10)',   border: 'rgba(0,220,100,0.50)'   },
-  { name: 'New York', startH: 12, startM: 0, endH: 21, endM: 0,  color: 'rgba(255,80,80,0.09)',   border: 'rgba(255,80,80,0.45)'   },
+  { name: 'Sydney',    startH: 21, startM: 0, endH: 6,  endM: 0,  color: 'rgba(100,160,255,0.10)', border: 'rgba(100,160,255,0.35)' },
+  { name: 'Tokyo',     startH: 0,  startM: 0, endH: 9,  endM: 0,  color: 'rgba(255,200,50,0.09)',  border: 'rgba(255,200,50,0.35)'  },
+  { name: 'London',    startH: 7,  startM: 0, endH: 16, endM: 0,  color: 'rgba(0,220,100,0.10)',   border: 'rgba(0,220,100,0.40)'   },
+  { name: 'New York',  startH: 12, startM: 0, endH: 21, endM: 0,  color: 'rgba(255,80,80,0.09)',   border: 'rgba(255,80,80,0.35)'   },
 ] as const;
 
 type Props = {
   candles: Candle[];
-
   fvgs?: FVG[];
   sweeps?: LiquiditySweep[];
   mssEvents?: MSS[];
@@ -68,7 +68,6 @@ type Props = {
   theme: Theme;
   granularity: number;
   onCrosshairMove?: (time: number | null, price: number | null) => void;
-  onCountdownChange?: (secs: number) => void;
   drawnLines?: DrawnLine[];
   onLinesChange?: (lines: DrawnLine[]) => void;
   drawMode?: boolean;
@@ -94,8 +93,21 @@ function distToSegment(px: number, py: number, x1: number, y1: number, x2: numbe
 
 const HIT_RADIUS = 8;
 
+function fmtCountdown(secs: number): string {
+  if (secs <= 0) return '0:00';
+  const m = Math.floor(secs / 60);
+  const s = secs % 60;
+  if (m >= 60) {
+    const h = Math.floor(m / 60);
+    const rm = m % 60;
+    return `${h}:${String(rm).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+  }
+  return `${m}:${String(s).padStart(2, '0')}`;
+}
+
 /**
  * Given the visible time range, generate session bands as pixel x-ranges.
+ * Sessions that cross midnight are split into two day-segments.
  */
 function getSessionBands(
   chart: IChartApi,
@@ -108,37 +120,42 @@ function getSessionBands(
   const bands: Array<{ x1: number; x2: number; color: string; border: string; name: string }> = [];
   const DAY = 86400;
 
+  // Snap to day boundaries — iterate each day in visible range
   const fromDay = Math.floor(visibleRange.from / DAY) * DAY;
   const toDay   = Math.ceil(visibleRange.to / DAY) * DAY;
 
   for (const sess of SESSIONS) {
     const startSec = sess.startH * 3600 + sess.startM * 60;
     const endSec   = sess.endH   * 3600 + sess.endM   * 60;
-    const crossesMidnight = endSec <= startSec;
+    const crossesMidnight = endSec <= startSec; // e.g. Sydney 21:00–06:00
 
     for (let day = fromDay; day <= toDay; day += DAY) {
       let segStart: number, segEnd: number;
 
       if (crossesMidnight) {
-        // Part 1: start → midnight
+        // Part 1: day + startSec → day + DAY (midnight)
         segStart = day + startSec;
         segEnd   = day + DAY;
         const x1a = chart.timeScale().timeToCoordinate(segStart as any);
         const x2a = chart.timeScale().timeToCoordinate(segEnd as any);
         if (x1a != null && x2a != null) {
-          const left = Math.min(x1a, x2a); const right = Math.max(x1a, x2a);
-          if (right > 0 && left < canvasWidth)
+          const left  = Math.min(x1a, x2a);
+          const right = Math.max(x1a, x2a);
+          if (right > 0 && left < canvasWidth) {
             bands.push({ x1: left, x2: right, color: sess.color, border: sess.border, name: sess.name });
+          }
         }
-        // Part 2: midnight → end
+        // Part 2: next day 00:00 → day + DAY + endSec
         segStart = day + DAY;
         segEnd   = day + DAY + endSec;
         const x1b = chart.timeScale().timeToCoordinate(segStart as any);
         const x2b = chart.timeScale().timeToCoordinate(segEnd as any);
         if (x1b != null && x2b != null) {
-          const left = Math.min(x1b, x2b); const right = Math.max(x1b, x2b);
-          if (right > 0 && left < canvasWidth)
+          const left  = Math.min(x1b, x2b);
+          const right = Math.max(x1b, x2b);
+          if (right > 0 && left < canvasWidth) {
             bands.push({ x1: left, x2: right, color: sess.color, border: sess.border, name: sess.name });
+          }
         }
       } else {
         segStart = day + startSec;
@@ -146,9 +163,11 @@ function getSessionBands(
         const x1 = chart.timeScale().timeToCoordinate(segStart as any);
         const x2 = chart.timeScale().timeToCoordinate(segEnd as any);
         if (x1 != null && x2 != null) {
-          const left = Math.min(x1, x2); const right = Math.max(x1, x2);
-          if (right > 0 && left < canvasWidth)
+          const left  = Math.min(x1, x2);
+          const right = Math.max(x1, x2);
+          if (right > 0 && left < canvasWidth) {
             bands.push({ x1: left, x2: right, color: sess.color, border: sess.border, name: sess.name });
+          }
         }
       }
     }
@@ -159,7 +178,6 @@ function getSessionBands(
 
 const CandleChart = forwardRef<ChartHandle, Props>(({
   candles,
-
   fvgs = [],
   sweeps = [],
   mssEvents = [],
@@ -169,7 +187,6 @@ const CandleChart = forwardRef<ChartHandle, Props>(({
   theme,
   granularity,
   onCrosshairMove,
-  onCountdownChange,
   drawnLines = [],
   onLinesChange,
   drawMode = false,
@@ -182,6 +199,10 @@ const CandleChart = forwardRef<ChartHandle, Props>(({
   const seriesRef     = useRef<ISeriesApi<'Candlestick'> | null>(null);
   const overlaySeriesRef = useRef<ISeriesApi<'Line'>[]>([]);
   const visibleRangeRef  = useRef<{ from: number; to: number } | null>(null);
+
+  // Countdown
+  const [countdown, setCountdown] = useState<number>(0);
+  const countdownIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   // Drawing state
   const drawStateRef = useRef<{
@@ -198,14 +219,12 @@ const CandleChart = forwardRef<ChartHandle, Props>(({
 
   const linesRef          = useRef<DrawnLine[]>(drawnLines);
   const onLinesChangeRef  = useRef(onLinesChange);
-  const onCountdownRef    = useRef(onCountdownChange);
   const drawModeRef       = useRef(drawMode);
   const drawColorRef      = useRef(drawColor);
   const overlaysRef       = useRef(overlays);
 
   useEffect(() => { linesRef.current         = drawnLines; }, [drawnLines]);
   useEffect(() => { onLinesChangeRef.current = onLinesChange; }, [onLinesChange]);
-  useEffect(() => { onCountdownRef.current   = onCountdownChange; }, [onCountdownChange]);
   useEffect(() => { drawModeRef.current      = drawMode; }, [drawMode]);
   useEffect(() => { drawColorRef.current     = drawColor; }, [drawColor]);
   useEffect(() => { overlaysRef.current      = overlays; }, [overlays]);
@@ -214,17 +233,18 @@ const CandleChart = forwardRef<ChartHandle, Props>(({
     syncCrosshair: (_time: number | null, _price: number | null) => {},
   }));
 
-  // ── Countdown — bubble up to parent ───────────────────────────────────────
+  // ── Countdown ─────────────────────────────────────────────────────────────
   useEffect(() => {
-    if (candles.length === 0) { onCountdownRef.current?.(0); return; }
+    if (countdownIntervalRef.current) clearInterval(countdownIntervalRef.current);
+    if (candles.length === 0) return;
     const nextCandleTime = candles[candles.length - 1].time + granularity;
     const tick = () => {
-      const secs = Math.max(0, nextCandleTime - Math.floor(Date.now() / 1000));
-      onCountdownRef.current?.(secs);
+      const nowSec = Math.floor(Date.now() / 1000);
+      setCountdown(Math.max(0, nextCandleTime - nowSec));
     };
     tick();
-    const id = setInterval(tick, 1000);
-    return () => clearInterval(id);
+    countdownIntervalRef.current = setInterval(tick, 1000);
+    return () => { if (countdownIntervalRef.current) clearInterval(countdownIntervalRef.current); };
   }, [candles, granularity]);
 
   // ── Canvas converters ──────────────────────────────────────────────────────
@@ -253,7 +273,7 @@ const CandleChart = forwardRef<ChartHandle, Props>(({
     };
   }, []);
 
-  // ── Canvas redraw ─────────────────────────────────────────────────────────
+  // ── Canvas redraw (sessions + drawn lines) ─────────────────────────────────
   const redrawCanvas = useCallback(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -261,12 +281,12 @@ const CandleChart = forwardRef<ChartHandle, Props>(({
     if (!ctx) return;
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-    const chart = chartRef.current;
-    const ds    = drawStateRef.current;
-    const lines = linesRef.current;
-    const ovl   = overlaysRef.current;
+    const chart  = chartRef.current;
+    const ds     = drawStateRef.current;
+    const lines  = linesRef.current;
+    const ovl    = overlaysRef.current;
 
-    // Session bands
+    // ── Session bands (drawn first, behind everything) ──────────────────────
     if (chart && ovl.sessions) {
       const bands = getSessionBands(chart, canvas.width, canvas.height, visibleRangeRef.current);
       for (const band of bands) {
@@ -276,15 +296,18 @@ const CandleChart = forwardRef<ChartHandle, Props>(({
         ctx.save();
         ctx.fillStyle = band.color;
         ctx.fillRect(x1, 0, x2 - x1, canvas.height);
+        // Left border line
         ctx.strokeStyle = band.border;
         ctx.lineWidth = 1;
         ctx.setLineDash([3, 3]);
-        ctx.beginPath(); ctx.moveTo(x1, 0); ctx.lineTo(x1, canvas.height); ctx.stroke();
+        ctx.beginPath();
+        ctx.moveTo(x1, 0); ctx.lineTo(x1, canvas.height);
+        ctx.stroke();
         ctx.restore();
       }
     }
 
-    // Drawn lines
+    // ── Drawn lines ──────────────────────────────────────────────────────────
     for (const line of lines) {
       const px = lineToPixels(line);
       if (!px) continue;
@@ -294,8 +317,12 @@ const CandleChart = forwardRef<ChartHandle, Props>(({
       ctx.lineWidth = isDragging ? 2.5 : 1.5;
       ctx.setLineDash([]);
       if (isDragging) { ctx.shadowColor = line.color; ctx.shadowBlur = 8; }
-      ctx.beginPath(); ctx.moveTo(px.x1, px.y1); ctx.lineTo(px.x2, px.y2); ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(px.x1, px.y1);
+      ctx.lineTo(px.x2, px.y2);
+      ctx.stroke();
       ctx.restore();
+      // Endpoint dots
       ctx.save();
       ctx.fillStyle = line.color;
       for (const { x, y } of [{ x: px.x1, y: px.y1 }, { x: px.x2, y: px.y2 }]) {
@@ -304,13 +331,16 @@ const CandleChart = forwardRef<ChartHandle, Props>(({
       ctx.restore();
     }
 
-    // In-progress preview
+    // ── In-progress preview ─────────────────────────────────────────────────
     if (ds.drawing) {
       ctx.save();
       ctx.strokeStyle = drawColorRef.current;
       ctx.lineWidth = 1.5;
       ctx.setLineDash([5, 4]);
-      ctx.beginPath(); ctx.moveTo(ds.startX, ds.startY); ctx.lineTo(ds.curX, ds.curY); ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(ds.startX, ds.startY);
+      ctx.lineTo(ds.curX, ds.curY);
+      ctx.stroke();
       ctx.restore();
     }
   }, [lineToPixels]);
@@ -368,18 +398,13 @@ const CandleChart = forwardRef<ChartHandle, Props>(({
         const d = param.seriesData.get(series) as any;
         if (d) price = d.close ?? d.value ?? null;
       }
-      onCrosshairMove?.(param.time ? Number(param.time) : null, price);
+      if (onCrosshairMove) {
+        onCrosshairMove(param.time ? Number(param.time) : null, price);
+      }
     });
 
     chart.timeScale().subscribeVisibleTimeRangeChange((range) => {
       visibleRangeRef.current = range ? { from: Number(range.from), to: Number(range.to) } : null;
-      syncCanvasSize();
-      redrawCanvas();
-    });
-
-    requestAnimationFrame(() => {
-      const r = chart.timeScale().getVisibleRange();
-      if (r) visibleRangeRef.current = { from: Number(r.from), to: Number(r.to) };
       syncCanvasSize();
       redrawCanvas();
     });
@@ -430,7 +455,7 @@ const CandleChart = forwardRef<ChartHandle, Props>(({
     });
   }, [overlays.grid, theme.grid]);
 
-  // ── Sessions toggle ────────────────────────────────────────────────────────
+  // ── Sessions toggle — just redraw canvas ──────────────────────────────────
   useEffect(() => {
     syncCanvasSize();
     redrawCanvas();
@@ -438,19 +463,12 @@ const CandleChart = forwardRef<ChartHandle, Props>(({
 
   // ── Candles ────────────────────────────────────────────────────────────────
   useEffect(() => {
-    const chart = chartRef.current;
-    if (!seriesRef.current || !chart || candles.length === 0) return;
+    if (!seriesRef.current || candles.length === 0) return;
     const data: CandlestickData[] = candles.map(c => ({
       time: c.time as any, open: c.open, high: c.high, low: c.low, close: c.close,
     }));
     seriesRef.current.setData(data);
-
-    requestAnimationFrame(() => {
-      const r = chart.timeScale().getVisibleRange();
-      if (r) visibleRangeRef.current = { from: Number(r.from), to: Number(r.to) };
-      syncCanvasSize();
-      redrawCanvas();
-    });
+    setTimeout(() => { syncCanvasSize(); redrawCanvas(); }, 0);
   }, [candles, redrawCanvas, syncCanvasSize]);
 
   // ── SMC Overlays ───────────────────────────────────────────────────────────
@@ -461,11 +479,10 @@ const CandleChart = forwardRef<ChartHandle, Props>(({
     overlaySeriesRef.current.forEach(s => { try { chart.removeSeries(s); } catch {} });
     overlaySeriesRef.current = [];
 
-    const extentCandles = candles;
-    const firstTime = extentCandles[0].time;
-    const lastTime  = extentCandles[extentCandles.length - 1].time;
+    if (candles.length >= 2) {
+      const firstTime = candles[0].time;
+      const lastTime  = candles[candles.length - 1].time;
 
-    if (extentCandles.length >= 2) {
       if (overlays.crtLevels && crtLevel) {
         const crtStart = Math.max(crtLevel.time, firstTime);
         [
@@ -647,7 +664,7 @@ const CandleChart = forwardRef<ChartHandle, Props>(({
         onMouseLeave={handleMouseLeave}
       />
 
-      {/* Session legend */}
+      {/* Session legend — top left */}
       {overlays.sessions && (
         <div style={{
           position: 'absolute', top: 6, left: 8, zIndex: 20,
@@ -656,7 +673,7 @@ const CandleChart = forwardRef<ChartHandle, Props>(({
           {SESSIONS.map(s => (
             <div key={s.name} style={{
               display: 'flex', alignItems: 'center', gap: 3,
-              background: 'rgba(0,0,0,0.50)',
+              background: 'rgba(0,0,0,0.45)',
               border: `1px solid ${s.border}`,
               borderRadius: 3, padding: '1px 5px',
               fontFamily: "'JetBrains Mono', monospace",
@@ -666,6 +683,22 @@ const CandleChart = forwardRef<ChartHandle, Props>(({
               {s.name}
             </div>
           ))}
+        </div>
+      )}
+
+      {/* Countdown — bottom left */}
+      {candles.length > 0 && (
+        <div style={{
+          position: 'absolute', bottom: 24, left: 8, zIndex: 20,
+          background: 'rgba(0,0,0,0.55)',
+          border: `1px solid ${theme.border}`,
+          borderRadius: 3, padding: '2px 6px',
+          fontFamily: "'JetBrains Mono', monospace",
+          fontSize: 10,
+          color: countdown <= 10 ? theme.bear : countdown <= 30 ? theme.sweep : theme.label,
+          letterSpacing: 1, pointerEvents: 'none',
+        }}>
+          {fmtCountdown(countdown)}
         </div>
       )}
     </div>

@@ -32,7 +32,6 @@ const DEFAULT_SETTINGS: ScannerSettings = {
   setupExpiryCandles: 30,
 };
 
-
 type HTFMode = 'full' | 'single';
 const LINE_COLORS = ['#f5c518', '#ff9900', '#00bfff', '#00e676', '#ff5252', '#ffffff'];
 
@@ -49,7 +48,7 @@ const DARK_THEME: Theme = {
   sweep:   '#ff9900',
   mss:     '#f5c518',
   crt:     '#4488ff',
-  grid:    '#1a1a1a',
+  grid:    '#111111',
 };
 
 const LIGHT_THEME: Theme = {
@@ -64,76 +63,35 @@ const LIGHT_THEME: Theme = {
   sweep:   '#c05a00',
   mss:     '#8a6200',
   crt:     '#1a44bb',
-  grid:    '#d0cbbf',
+  grid:    '#ddd8cc',
 };
-
-function fmtCountdown(secs: number): string {
-  if (secs <= 0) return '0:00';
-  const m = Math.floor(secs / 60);
-  const s = secs % 60;
-  if (m >= 60) {
-    const h = Math.floor(m / 60);
-    const rm = m % 60;
-    return `${h}:${String(rm).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
-  }
-  return `${m}:${String(s).padStart(2, '0')}`;
-}
-
-function fmt(p: number) {
-  if (p > 1000) return p.toFixed(2);
-  if (p > 10)   return p.toFixed(3);
-  return p.toFixed(4);
-}
-
-// ── localStorage helpers ──────────────────────────────────────────────────────
-function lsGet<T>(key: string, fallback: T): T {
-  try { const v = localStorage.getItem(key); return v !== null ? JSON.parse(v) : fallback; } catch { return fallback; }
-}
-function lsSet(key: string, val: unknown) {
-  try { localStorage.setItem(key, JSON.stringify(val)); } catch {}
-}
 
 export default function Index() {
   const { connected } = useConnection(DERIV_TOKEN);
-
-  // ── Persisted state ────────────────────────────────────────────────────────
-  const [dark, setDark] = useState<boolean>(() => lsGet('smc_dark', true));
-  const [symbol, setSymbol] = useState<string>(() => lsGet('smc_symbol', DEFAULT_SYMBOL));
-  const [htfGranularity, setHtfGranularity] = useState<number>(() => lsGet('smc_htf', DEFAULT_HTF));
-  const [ltfGranularity, setLtfGranularity] = useState<number>(() => lsGet('smc_ltf', DEFAULT_LTF));
-  const [htfMode, setHtfMode] = useState<HTFMode>(() => lsGet('smc_htfMode', 'full' as HTFMode));
-  const [showHtfPrice, setShowHtfPrice] = useState<boolean>(() => lsGet('smc_showPrice', true));
-  const [overlays, setOverlays] = useState<OverlayToggles>(() => lsGet('smc_overlays', {
-    crtLevels: true, fvg: true, sweep: true, mss: true, grid: true, crossLines: true, sessions: true,
-  }));
-  const [drawnLines, setDrawnLines] = useState<DrawnLine[]>(() => lsGet('smc_lines', []));
-
-  useEffect(() => { lsSet('smc_dark',      dark); }, [dark]);
-  useEffect(() => { lsSet('smc_symbol',    symbol); }, [symbol]);
-  useEffect(() => { lsSet('smc_htf',       htfGranularity); }, [htfGranularity]);
-  useEffect(() => { lsSet('smc_ltf',       ltfGranularity); }, [ltfGranularity]);
-  useEffect(() => { lsSet('smc_htfMode',   htfMode); }, [htfMode]);
-  useEffect(() => { lsSet('smc_showPrice', showHtfPrice); }, [showHtfPrice]);
-  useEffect(() => { lsSet('smc_overlays',  overlays); }, [overlays]);
-  useEffect(() => { lsSet('smc_lines',     drawnLines); }, [drawnLines]);
-
+  const [dark, setDark] = useState(true);
   const T = dark ? DARK_THEME : LIGHT_THEME;
 
+  const [symbol, setSymbol] = useState(DEFAULT_SYMBOL);
+  const [htfGranularity, setHtfGranularity] = useState(DEFAULT_HTF);
+  const [ltfGranularity, setLtfGranularity] = useState(DEFAULT_LTF);
+  const [htfMode, setHtfMode] = useState<HTFMode>('full');
   const [setupStatus, setSetupStatus] = useState<SetupStatus | null>(null);
   const [settings, setSettings] = useState<ScannerSettings>(DEFAULT_SETTINGS);
   const [showSettings, setShowSettings] = useState(false);
   const [alertLog, setAlertLog] = useState<AlertEntry[]>([]);
   const [scannerOpen, setScannerOpen] = useState(true);
   const [drawMode, setDrawMode] = useState(false);
+  const [drawnLines, setDrawnLines] = useState<DrawnLine[]>([]);
   const [lineColorIdx, setLineColorIdx] = useState(0);
 
-  // Countdown per panel
-  const [htfCountdown, setHtfCountdown] = useState(0);
-  const [ltfCountdown, setLtfCountdown] = useState(0);
-
-  // Crosshair prices
-  const [htfCrosshairPrice, setHtfCrosshairPrice] = useState<number | null>(null);
-  const [ltfCrosshairPrice, setLtfCrosshairPrice] = useState<number | null>(null);
+  const [overlays, setOverlays] = useState<OverlayToggles>({
+    crtLevels: true,
+    fvg: true,
+    sweep: true,
+    mss: true,
+    grid: true,
+    crossLines: true,
+  });
 
   const { candles: htfCandles, loading: htfLoading } = useDerivCandles(symbol, htfGranularity);
   const { candles: ltfCandles, loading: ltfLoading } = useDerivCandles(symbol, ltfGranularity);
@@ -183,15 +141,16 @@ export default function Index() {
     [htfLen]
   );
 
-  // HTF display candles
+  // HTF display — single = last closed candle
   const htfDisplayCandles = useMemo(() => {
     if (htfMode === 'single') {
-      return htfCandles.length >= 2 ? htfCandles.slice(-2, -1) : htfCandles.slice(-1);
+      if (htfCandles.length >= 2) return htfCandles.slice(-2, -1);
+      return htfCandles.slice(-1);
     }
     return htfCandles;
   }, [htfCandles, htfMode]);
 
-  // LTF display
+  // LTF display — single = only candles that fit inside 1 HTF candle
   const ltfCandlesPerHTF = Math.max(1, Math.round(htfGranularity / ltfGranularity));
   const ltfDisplayCandles = useMemo(() => {
     if (htfMode === 'single') return ltfCandles.slice(-ltfCandlesPerHTF);
@@ -227,16 +186,6 @@ export default function Index() {
   const htfLabel = HTF_TIMEFRAMES.find(t => t.value === htfGranularity)?.label ?? '';
   const ltfLabel = LTF_TIMEFRAMES.find(t => t.value === ltfGranularity)?.label ?? '';
   const lineColor = LINE_COLORS[lineColorIdx % LINE_COLORS.length];
-
-  // Live price
-  const htfLivePrice = htfCandles.length > 0
-    ? (htfMode === 'single' && htfCandles.length >= 2
-        ? htfCandles[htfCandles.length - 2].close
-        : htfCandles[htfCandles.length - 1].close)
-    : null;
-  const ltfLivePrice = ltfCandles.length > 0 ? ltfCandles[ltfCandles.length - 1].close : null;
-  const displayHtfPrice = htfCrosshairPrice ?? htfLivePrice;
-  const displayLtfPrice = ltfCrosshairPrice ?? ltfLivePrice;
 
   return (
     <div style={{
@@ -279,10 +228,9 @@ export default function Index() {
         <ToggleBtn T={T} label="SWEEP" active={overlays.sweep}     color={T.sweep} onClick={() => toggleOverlay('sweep')} />
         <ToggleBtn T={T} label="MSS"   active={overlays.mss}       color={T.mss}   onClick={() => toggleOverlay('mss')} />
         <ToggleBtn T={T} label="GRID"  active={overlays.grid}                      onClick={() => toggleOverlay('grid')} />
-        <ToggleBtn T={T} label="SESS"  active={overlays.sessions} color="#00cc77"  onClick={() => toggleOverlay('sessions')} />
-        <ToggleBtn T={T} label="PRICE" active={showHtfPrice} color={T.sweep}       onClick={() => setShowHtfPrice(v => !v)} />
         <Divider T={T} />
 
+        {/* Draw tools */}
         <ToggleBtn T={T} label={drawMode ? '✎ ON' : '✎'} active={drawMode} color={lineColor}
           onClick={() => setDrawMode(d => !d)} />
         {drawMode && (
@@ -300,13 +248,17 @@ export default function Index() {
 
         <div style={{ flex: 1 }} />
 
-        <ToggleBtn T={T} label={dark ? '☀' : '◑'} active={false} onClick={() => setDark(d => !d)} />
+        {/* Dark/Light toggle */}
+        <ToggleBtn T={T} label={dark ? '☀' : '◑'} active={false}
+          onClick={() => setDark(d => !d)} />
         <Divider T={T} />
 
+        {/* Scanner toggle */}
         <ToggleBtn T={T} label={scannerOpen ? '▶ SCAN' : '◀ SCAN'} active={scannerOpen}
           color={T.mss} onClick={() => setScannerOpen(o => !o)} />
         <Divider T={T} />
 
+        {/* Connection dot */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
           <span style={{
             width: 6, height: 6, borderRadius: '50%',
@@ -326,6 +278,7 @@ export default function Index() {
       {/* ── Main ────────────────────────────────────────────────── */}
       <div style={{ flex: 1, display: 'flex', overflow: 'hidden', minHeight: 0 }}>
 
+        {/* Charts — side by side, equal width */}
         <div style={{ flex: 1, display: 'flex', flexDirection: 'row', minWidth: 0, overflow: 'hidden' }}>
 
           {/* HTF */}
@@ -334,10 +287,6 @@ export default function Index() {
               title={htfLabel}
               subtitle={htfMode === 'single' ? 'LAST CLOSED' : 'HTF'}
               loading={htfLoading}
-              price={showHtfPrice ? displayHtfPrice : null}
-              priceColor={T.text}
-              countdown={htfCandles.length > 0 ? htfCountdown : null}
-              countdownTheme={T}
             />
             <div style={{ flex: 1, minHeight: 0, position: 'relative' }}>
               {htfLoading && <LoadingOverlay T={T} />}
@@ -352,9 +301,6 @@ export default function Index() {
                     overlays={overlays}
                     theme={T}
                     height={h}
-                    granularity={htfGranularity}
-                    onCrosshairMove={(_, price) => setHtfCrosshairPrice(price)}
-                    onCountdownChange={setHtfCountdown}
                     drawnLines={drawnLines}
                     onLinesChange={handleLinesChange}
                     drawMode={drawMode}
@@ -371,10 +317,6 @@ export default function Index() {
               title={ltfLabel}
               subtitle="LTF"
               loading={ltfLoading}
-              price={showHtfPrice ? displayLtfPrice : null}
-              priceColor={T.text}
-              countdown={ltfCandles.length > 0 ? ltfCountdown : null}
-              countdownTheme={T}
             />
             <div style={{ flex: 1, minHeight: 0, position: 'relative' }}>
               {ltfLoading && <LoadingOverlay T={T} />}
@@ -389,9 +331,6 @@ export default function Index() {
                     overlays={overlays}
                     theme={T}
                     height={h}
-                    granularity={ltfGranularity}
-                    onCrosshairMove={(_, price) => setLtfCrosshairPrice(price)}
-                    onCountdownChange={setLtfCountdown}
                     drawnLines={drawnLines}
                     onLinesChange={handleLinesChange}
                     drawMode={drawMode}
@@ -459,9 +398,7 @@ export default function Index() {
           <span style={{ color: T.label }}>AWAITING DATA...</span>
         )}
         {drawMode && (
-          <span style={{ marginLeft: 'auto', color: lineColor, fontSize: 10 }}>
-            ✎ DRAG TO DRAW · DRAG LINE TO MOVE
-          </span>
+          <span style={{ marginLeft: 'auto', color: lineColor, fontSize: 10 }}>✎ DRAG TO DRAW · DRAG LINE TO MOVE</span>
         )}
       </div>
 
@@ -470,7 +407,14 @@ export default function Index() {
   );
 }
 
-// ── Sub-components ────────────────────────────────────────────────────────────
+// ── Helpers ───────────────────────────────────────────────────────────────────
+function fmt(p: number) {
+  if (p > 1000) return p.toFixed(2);
+  if (p > 10)   return p.toFixed(3);
+  return p.toFixed(4);
+}
+
+// ── Sub-components (all theme-aware) ─────────────────────────────────────────
 
 function Select({ T, value, onChange, options, width }: {
   T: Theme; value: string | number;
@@ -515,16 +459,9 @@ function Divider({ T }: { T: Theme }) {
   return <div style={{ width: 1, height: 16, background: T.border, flexShrink: 0 }} />;
 }
 
-function PanelHeader({ T, title, subtitle, loading, price, priceColor, countdown, countdownTheme }: {
+function PanelHeader({ T, title, subtitle, loading }: {
   T: Theme; title: string; subtitle: string; loading: boolean;
-  price?: number | null; priceColor?: string;
-  countdown?: number | null; countdownTheme?: Theme;
 }) {
-  const ct = countdownTheme ?? T;
-  const cdColor = countdown != null
-    ? (countdown <= 10 ? ct.bear : countdown <= 30 ? ct.sweep : ct.label)
-    : ct.label;
-
   return (
     <div style={{
       height: 28, borderBottom: `1px solid ${T.border}`,
@@ -533,25 +470,7 @@ function PanelHeader({ T, title, subtitle, loading, price, priceColor, countdown
     }}>
       <span style={{ color: T.text, fontSize: 11, fontWeight: 600 }}>{title}</span>
       <span style={{ color: T.label, fontSize: 10 }}>{subtitle}</span>
-      {price != null && (
-        <span style={{ marginLeft: 4, color: priceColor ?? T.text, fontSize: 11, fontWeight: 700, letterSpacing: 0.5 }}>
-          {price > 1000 ? price.toFixed(2) : price > 10 ? price.toFixed(3) : price.toFixed(4)}
-        </span>
-      )}
       {loading && <span style={{ color: T.neutral, fontSize: 10, marginLeft: 'auto' }}>LOADING...</span>}
-      {/* Countdown — right side of panel header, always visible */}
-      {countdown != null && !loading && (
-        <span style={{
-          marginLeft: loading ? 0 : 'auto',
-          color: cdColor,
-          fontSize: 10,
-          fontWeight: 600,
-          letterSpacing: 1,
-          fontFamily: "'JetBrains Mono', monospace",
-        }}>
-          {fmtCountdown(countdown)}
-        </span>
-      )}
     </div>
   );
 }
