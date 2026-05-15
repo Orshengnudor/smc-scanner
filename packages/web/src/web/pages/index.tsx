@@ -144,52 +144,67 @@ function AuthGate({ children }: { children: React.ReactNode }) {
 const TOUR_STEPS = [
   {
     title: 'Welcome to SMC Scanner',
-    body: 'This is your Smart Money Concept (SMC) trading scanner. It monitors real-time price action and automatically detects key market structures to help you identify high-probability trade setups.',
+    body: 'This is your Smart Money Concept (SMC) trading scanner — a real-time tool that connects directly to the Deriv live price feed and automatically detects key market structures.\n\nIt does the heavy lifting: identifying Fair Value Gaps, Liquidity Sweeps, Market Structure Shifts, and CRT levels so you can focus on making trading decisions, not hunting for setups manually.\n\nThis quick tour will walk you through every part of the interface. Use Next/Prev to navigate, or Skip if you want to jump straight in.',
     anchor: null,
   },
   {
-    title: 'Symbol & Timeframe Selector',
-    body: 'Use the dropdown at the top-left to select your trading symbol (e.g. Volatility 75). HTF is your Higher Time Frame for bias — set it to a bigger candle period. LTF is your Lower Time Frame for entry — set it smaller.',
+    title: 'Symbol Selector',
+    body: 'The dropdown at the top-left lets you choose which market to monitor. Examples include Volatility 75, Volatility 100, Boom/Crash indices, and other Deriv synthetic instruments.\n\nWhen you change the symbol, both charts reload with fresh live data for that market. Your last selected symbol is saved automatically — it will still be selected next time you open the scanner.',
     anchor: 'header',
   },
   {
-    title: 'SINGLE & LIVE Mode',
-    body: 'SINGLE mode shows only the last closed HTF candle and its corresponding LTF candles — perfect for zoomed-in entry analysis. Enable LIVE to also show the currently forming candle in real time.',
+    title: 'HTF & LTF Timeframe Selectors',
+    body: 'HTF = Higher Time Frame. This is your big-picture view — used to determine market bias and identify key structural levels. Set it to a longer candle period (e.g. 1H, 4H).\n\nLTF = Lower Time Frame. This is your entry view — used to time your trade after HTF has confirmed a setup. Set it smaller than your HTF (e.g. 5M, 15M).\n\nThe two charts always show the same symbol side by side — HTF on the left, LTF on the right. Both update live.',
     anchor: 'header',
   },
   {
-    title: 'Overlay Toggles (CRT, FVG, SWEEP, MSS)',
-    body: 'These buttons control what gets drawn on the charts:\n• CRT — Candle Range Theory levels (key HTF price zones)\n• FVG — Fair Value Gaps (imbalances price tends to fill)\n• SWEEP — Liquidity sweeps (stop-hunt wicks)\n• MSS — Market Structure Shifts (trend change signals)\n• GRID — Price grid\n• SESS — Trading sessions (London, NY, Asia)',
+    title: 'SINGLE Mode',
+    body: 'Click the SINGLE button to toggle Single Candle Mode on or off.\n\nWhen ON: The HTF chart zooms into just the last closed candle. The LTF chart shows only the candles that fall within that one HTF candle\'s time window. This lets you drill into the internal price action of a single HTF candle — very useful for finding precise entries.\n\nWhen OFF: Both charts show the full candle history as normal.\n\nWhen SINGLE is on, you also get the LIVE button. Click LIVE to also show the currently forming (not yet closed) HTF candle alongside the last closed one.',
     anchor: 'header',
   },
   {
-    title: 'Draw Tool',
-    body: 'Click the ✎ button to enter draw mode. Drag on either chart to draw horizontal lines. Click the color swatch to cycle through colors. Use CLR to clear all lines. Lines persist across sessions.',
+    title: 'CRT — Candle Range Theory',
+    body: 'Click the CRT button to turn this overlay on or off.\n\nCRT levels are key price zones derived from the open, high, low, and close of the last fully closed HTF candle. These represent the range that smart money established in the previous candle — and price frequently reacts at these levels.\n\nWhen ON: You\'ll see horizontal lines drawn on both charts marking the CRT high, low, open, and close levels.\n\nWhen OFF: These lines are hidden. Toggle it off if you want a cleaner chart without the reference lines.',
     anchor: 'header',
   },
   {
-    title: 'HTF & LTF Charts',
-    body: 'The left panel is your Higher Time Frame chart — used to read overall bias and structure. The right panel is your Lower Time Frame — used to time your entry. Both update live via Deriv WebSocket feed.',
-    anchor: null,
+    title: 'FVG — Fair Value Gap',
+    body: 'Click the FVG button to turn this overlay on or off.\n\nA Fair Value Gap is a price imbalance that forms between three consecutive candles — where the wick of candle 1 and the wick of candle 3 do not overlap with candle 2\'s body. This gap represents an area of inefficiency that price has a strong tendency to return to and "fill".\n\nWhen ON: Active FVG zones are shaded on the charts. Bullish FVGs are typically green (price likely to move up through them), bearish FVGs are red.\n\nWhen OFF: FVG zones are hidden. You might do this if you want to reduce visual clutter while focusing on other signals.',
+    anchor: 'header',
+  },
+  {
+    title: 'SWEEP — Liquidity Sweep',
+    body: 'Click the SWEEP button to turn this overlay on or off.\n\nA Liquidity Sweep (also called a stop hunt) is when price pushes past a prior swing high or swing low — triggering stop losses from retail traders sitting beyond those levels — and then reverses sharply. This is how smart money accumulates positions at better prices.\n\nWhen ON: Detected sweep points are marked on the charts with arrows or markers showing where the sweep occurred and which direction.\n\nWhen OFF: Sweep markers are hidden. The SCAN panel still detects sweeps in the background regardless — this only controls the chart visuals.',
+    anchor: 'header',
+  },
+  {
+    title: 'MSS — Market Structure Shift',
+    body: 'Click the MSS button to turn this overlay on or off.\n\nA Market Structure Shift occurs when price breaks through a significant structure level in the opposite direction after a liquidity sweep. For example: if price sweeps a prior low (bearish sweep) and then breaks above a recent high, that\'s a bullish MSS — signalling a potential reversal from bearish to bullish.\n\nMSS is one of the strongest confirmation signals in SMC trading. An MSS after a sweep is the market showing its hand.\n\nWhen ON: MSS events are marked on the chart with labels.\n\nWhen OFF: MSS markers are hidden from the chart.',
+    anchor: 'header',
+  },
+  {
+    title: 'GRID, SESS & PRICE',
+    body: 'Three more toggles — each controls a different visual layer:\n\nGRID — Turns the background price grid lines on or off. The grid helps you visually align price levels across the chart. Turn it off for a minimal clean look.\n\nSESS (Sessions) — Highlights the major trading session windows: London, New York, and Asia. Each session is shaded a different colour on the chart. Very useful for understanding when volume and volatility spike. Click to toggle on/off.\n\nPRICE — Shows the current live price reading in the chart panel headers. When on, you see the real-time price update next to the timeframe label. Click to toggle it off if you prefer a cleaner header.',
+    anchor: 'header',
+  },
+  {
+    title: 'Draw Tool (✎)',
+    body: 'Click the ✎ button to enter Draw Mode.\n\nIn draw mode, you can drag horizontally on either chart to draw your own horizontal level lines — useful for marking S/R levels, your entry zones, or personal price targets.\n\nColour swatch: When draw mode is on, a small coloured square appears. Click it to cycle through available line colours.\n\nMove lines: After drawing, you can drag any line up or down to reposition it.\n\nCLR button: Appears when you have drawn lines. Click CLR to delete all drawn lines at once.\n\nYour lines are saved in your browser — they persist across sessions automatically. Clearing browser data will erase them.',
+    anchor: 'header',
   },
   {
     title: 'SCAN Panel',
-    body: 'The SCAN sidebar (toggle via SCAN button top-right) shows the auto-detected setup status: market bias, whether a liquidity sweep occurred, if MSS is confirmed, and if a valid FVG is present. When all 4 conditions align — a setup is confirmed with SL and TP levels.',
+    body: 'Click the SCAN button (top-right) to open or close the setup analysis panel.\n\nThe SCAN panel is the brain of the scanner. It shows the current state of all 4 SMC conditions in real time:\n\n• BIAS — Bullish or Bearish, based on HTF market structure\n• SWEEP — Whether a liquidity sweep was detected (BSL = Buy Side, SSL = Sell Side)\n• MSS — Whether a Market Structure Shift has confirmed after the sweep\n• FVG — Whether an active Fair Value Gap is present for entry\n\nWhen all 4 conditions are met, a SETUP fires with a direction (BUY or SELL), a Stop Loss level, and Take Profit target.\n\nThe score (e.g. 3/4) shows how many conditions are currently met. Markets aren\'t always in setup — patience is part of the strategy.',
     anchor: 'scan',
   },
   {
-    title: 'Status Bar',
-    body: 'The bottom bar gives you a quick read at a glance: BIAS, SWEEP, MSS, FVG, active SETUP type, and trade zones (SL / TP1 with R-multiple). Green = bullish signal, red = bearish.',
+    title: 'Status Bar & Settings',
+    body: 'Status Bar (bottom strip): Shows a compact live summary — BIAS, SWEEP, MSS, FVG, SETUP type, and trade zones (SL / TP with R-multiple). Green = bullish, red = bearish. Always visible at a glance.\n\nSettings ⚙: Click the gear icon to fine-tune scanner sensitivity:\n• FVG Min Size — filters out tiny FVGs below a certain price gap size\n• Sweep Buffer — tolerance in price units for detecting sweeps\n• Setup Expiry — how many candles a setup stays valid before being dismissed\n\nTheme ☀/◑: Toggle between dark and light mode. Preference is saved automatically.\n\nAll settings persist across sessions.',
     anchor: 'statusbar',
   },
   {
-    title: 'Settings & Theme',
-    body: 'Click ⚙ to adjust scanner sensitivity (FVG min size, sweep buffer, setup expiry). Click ☀/◑ to toggle light/dark theme. All your preferences are saved automatically.',
-    anchor: 'header',
-  },
-  {
     title: "You're all set",
-    body: "That's the full tour. You can revisit this guide anytime by clicking the ? button in the top-right header.\n\nFor support, reach out:\n• Email: orshengnudor1@gmail.com\n• X: @orshengnudor_1",
+    body: "That covers everything. Every toggle on the header can be clicked at any time to turn features on or off — experiment freely, your preferences are always saved.\n\nYou can revisit this guide anytime by clicking the ? button in the header.\n\nFor support or questions:\n• Email: orshengnudor1@gmail.com\n• X: @orshengnudor_1",
     anchor: null,
   },
 ];
@@ -293,43 +308,362 @@ function OnboardingTour({ onDone }: { onDone: () => void }) {
 const DOC_SECTIONS = [
   {
     heading: 'What is SMC Scanner?',
-    body: `SMC Scanner is a real-time trading analysis tool built on Smart Money Concept (SMC) principles. It connects to the Deriv live feed and automatically detects key market structures — liquidity sweeps, fair value gaps, market structure shifts, and CRT levels — to help you identify high-probability trade setups.`,
+    body: `SMC Scanner is a real-time trading analysis tool built on Smart Money Concept (SMC) principles. It connects directly to the Deriv live price feed via WebSocket and automatically detects key market structures across two timeframes simultaneously.
+
+The goal is simple: instead of manually hunting for setups across multiple charts, the scanner watches the market 24/7 and tells you when a high-probability trade setup is forming — with entry context, stop loss, and take profit levels already calculated.
+
+It is built for traders who use the SMC / ICT methodology: liquidity concepts, fair value gaps, market structure, and candle range theory.`,
   },
   {
     heading: 'Getting Access',
-    body: `SMC Scanner is access-controlled. You need an access code from the admin to log in.\n\n• The admin has full authority over who can access the platform\n• Access codes can have expiry dates\n• If your code stops working, contact the admin for a renewal\n• To request access: Email orshengnudor1@gmail.com or DM @orshengnudor_1 on X`,
+    body: `SMC Scanner is a restricted platform. Access is controlled exclusively by the admin.
+
+How it works:
+• The admin generates a unique access code for each user
+• You use that code to log into the scanner
+• Access codes can have an expiry date set by the admin
+• The admin can revoke a code at any time
+
+If your code stops working, it has either expired or been revoked. The scanner will not give details — contact the admin directly for a new code.
+
+To request access:
+→ Email: orshengnudor1@gmail.com
+→ X: @orshengnudor_1
+
+You do not choose your own password. The access code IS your password — treat it like one. Do not share it.`,
   },
   {
     heading: 'Logging In',
-    body: `1. Open smc-scanner-web.vercel.app\n2. You'll be prompted for an access code\n3. Enter the code provided by the admin\n4. You're in — your session is saved, you won't need to log in again unless it expires\n\nIf you see "Invalid access code" — double-check you copied it correctly (no spaces). If it still fails, the code may be expired or revoked.`,
+    body: `1. Open smc-scanner-web.vercel.app
+2. You will see an "ACCESS REQUIRED" prompt
+3. Enter the access code given to you by the admin
+4. Click Enter (or press the Enter key)
+5. You're in
+
+Your session is saved in your browser. You will not need to log in again unless:
+• Your access code expires
+• Your access code is revoked by the admin
+• You manually log out
+• You clear your browser data
+
+If you see "Invalid access code":
+→ Make sure you copied the code exactly — no extra spaces at the start or end
+→ Codes are case-sensitive
+→ If it still fails, the code may have expired — contact admin`,
   },
   {
-    heading: 'Reading the Charts',
-    body: `The interface has two chart panels side by side:\n\n• Left panel = HTF (Higher Time Frame) — shows the big picture. Used to determine market bias (bullish or bearish) and key levels\n• Right panel = LTF (Lower Time Frame) — shows entry precision. Used to time your entry after HTF confirms structure\n\nBoth charts update live. The countdown timer in each panel header shows how many seconds remain until the current candle closes.`,
+    heading: 'The Two Charts (HTF & LTF)',
+    body: `The scanner always shows two charts side by side:
+
+LEFT CHART — HTF (Higher Time Frame)
+This is your big-picture view. You use the HTF to:
+• Determine overall market bias (is the market bullish or bearish right now?)
+• Identify key structural levels — previous highs, lows, and swing points
+• Spot where liquidity is sitting above or below price
+• Read CRT and FVG zones on a higher level
+
+Set the HTF to a longer candle period — common choices are 1H, 4H, or Daily.
+
+RIGHT CHART — LTF (Lower Time Frame)
+This is your precision entry view. After the HTF tells you the direction and key levels, you drop to the LTF to:
+• Time your actual entry more precisely
+• Watch for lower timeframe confirmation signals
+• See where FVGs and sweeps are forming within the move
+
+Set the LTF to something shorter than your HTF — e.g. if HTF is 1H, LTF could be 5M or 15M.
+
+Both charts stream live data. The countdown timer in each panel header shows how many seconds remain until the current candle closes.`,
   },
   {
-    heading: 'Overlay Indicators',
-    body: `Toggle these from the header buttons:\n\n• CRT — Candle Range Theory levels. Key price zones derived from the last closed HTF candle\n• FVG — Fair Value Gap. An imbalance zone between three candles that price often revisits\n• SWEEP — Liquidity sweep. A wick that took out a prior high/low (stop hunt) before reversing\n• MSS — Market Structure Shift. When price breaks structure in the opposite direction — signals a trend change\n• GRID — Price grid lines for visual reference\n• SESS — Session markers (London, New York, Asia) — useful for timing entries`,
+    heading: 'Symbol & Timeframe Selection',
+    body: `SYMBOL SELECTOR (top-left dropdown)
+Choose which Deriv market to monitor — Volatility 75, Volatility 100, Boom/Crash indices, and other synthetic instruments are available.
+
+When you change the symbol, both charts reload automatically with live data for that market. Your last selected symbol is remembered and restored next time you open the scanner.
+
+HTF SELECTOR
+Appears after the HTF label in the header. Click it to choose your Higher Time Frame candle period. Available options include 5M through Daily timeframes depending on your strategy.
+
+LTF SELECTOR
+Same as above but for the Lower Time Frame. Always set this smaller than your HTF so the two charts complement each other.
+
+Both timeframe preferences are saved automatically.`,
   },
   {
-    heading: 'The SCAN Panel',
-    body: `Click "SCAN" in the top-right to open the setup panel. It shows:\n\n• BIAS — overall market direction based on HTF structure\n• SWEEP — whether a liquidity sweep was detected and which side (Buy Side / Sell Side)\n• MSS — whether a market structure shift has confirmed\n• FVG — whether an active fair value gap is present\n• SETUP — when all 4 conditions align, a BUY or SELL setup is active with SL and TP1 levels\n\nThe setup score (e.g. 3/4) tells you how many conditions are currently met.`,
+    heading: 'SINGLE Mode & LIVE Toggle',
+    body: `SINGLE MODE (click to toggle on/off)
+When you click SINGLE in the header, it turns on Single Candle Mode.
+
+What it does: The HTF chart zooms into only the last fully closed HTF candle. The LTF chart then shows only the LTF candles that fall within that single HTF candle's time window.
+
+Why use it: This gives you an extremely zoomed-in view of what happened inside one HTF candle — perfect for finding precise entry points after you've identified a setup on the full chart. Instead of seeing hundreds of candles at once, you're focused on the one that matters right now.
+
+Click SINGLE again to turn it off and go back to full chart view.
+
+LIVE TOGGLE (only visible when SINGLE is on)
+When SINGLE mode is active, the LIVE button appears. Click it to also show the currently forming (not yet closed) HTF candle alongside the last closed one.
+
+This lets you watch in real time as the current candle develops — useful if you're monitoring whether a breakout or reversal is forming right now. Click LIVE again to hide the forming candle and only show the closed one.`,
   },
   {
-    heading: 'Drawing Lines',
-    body: `Click the ✎ button in the header to enter draw mode:\n\n• Drag horizontally on either chart to draw a line\n• Click the colored square to cycle through line colors\n• Drag an existing line up/down to reposition it\n• Click CLR to clear all drawn lines\n• Lines are saved across sessions automatically`,
+    heading: 'CRT — Candle Range Theory',
+    body: `BUTTON: CRT (click to toggle on/off)
+
+CRT stands for Candle Range Theory. When you click the CRT button in the header, it turns the CRT overlay on. Click it again to turn it off.
+
+What it shows: Horizontal lines drawn at the open, high, low, and close of the last fully closed HTF candle. These four price points define the "range" that was established in the previous HTF candle.
+
+Why it matters: In SMC, the previous candle's range is significant. Price frequently returns to these levels — the high and low act as liquidity pools, and the open/close act as balance points. When price approaches a CRT level, it often reacts with a reversal or continuation signal.
+
+How to use it:
+• CRT high — potential sell zone / liquidity above
+• CRT low — potential buy zone / liquidity below
+• CRT open/close — mid-range balance levels to watch
+
+When ON: You'll see horizontal reference lines on both charts.
+When OFF: The lines are hidden. Turn it off for a cleaner chart if you don't need the reference levels right now.`,
   },
   {
-    heading: 'SINGLE Mode',
-    body: `SINGLE mode restricts the HTF chart to show only the last closed candle, and the LTF chart to show only the candles that fall within that HTF candle's time range.\n\nThis is useful for zooming into a specific candle's internal price action without the noise of the full chart. Enable LIVE to also show the currently forming candle alongside the last closed one.`,
+    heading: 'FVG — Fair Value Gap',
+    body: `BUTTON: FVG (click to toggle on/off)
+
+FVG stands for Fair Value Gap. Click the FVG button in the header to turn this overlay on or off.
+
+What it is: A Fair Value Gap forms when three consecutive candles leave a price gap between them — specifically, when the high of candle 1 is below the low of candle 3 (or vice versa), leaving candle 2 completely isolated with no overlap. This gap is an area of price inefficiency — the market moved too fast and left an imbalance behind.
+
+Why it matters: Price has a very strong tendency to "return to fill" FVGs before continuing its move. FVGs are prime entry zones in SMC trading — they represent areas where smart money is still present and where the market is likely to revisit.
+
+Bullish FVG: Forms when price moved up aggressively, leaving a gap below. Price often comes back down to fill it before continuing up — this is where you look for buy entries.
+
+Bearish FVG: Forms when price moved down aggressively, leaving a gap above. Price often retraces up to fill it before continuing down — this is where you look for sell entries.
+
+When ON: Active (unfilled) FVG zones are shaded on both charts. Once a FVG gets filled by price, it is automatically marked as mitigated.
+When OFF: All FVG shading is hidden. The scanner still detects them in the background — this only affects the visual display.`,
   },
   {
-    heading: 'Settings',
-    body: `Click ⚙ to open scanner settings:\n\n• FVG Min Size — minimum gap size to be considered a valid FVG (filter out tiny gaps)\n• Sweep Buffer — tolerance in price units for sweep detection\n• Setup Expiry — how many candles a detected setup remains valid before being dismissed\n\nLeave at defaults if unsure — they're tuned for general use.`,
+    heading: 'SWEEP — Liquidity Sweep',
+    body: `BUTTON: SWEEP (click to toggle on/off)
+
+Click the SWEEP button in the header to show or hide liquidity sweep markers on the charts.
+
+What a sweep is: A Liquidity Sweep (also known as a stop hunt) happens when price pushes beyond a prior swing high or swing low — spiking just far enough to trigger stop-loss orders placed by retail traders beyond those levels — and then immediately reverses. This is smart money (institutions, banks) collecting liquidity at better prices before making their actual move.
+
+Why it matters: A sweep is the first signal in the SMC entry model. Before any significant move, the market typically takes out liquidity first. Recognising a sweep tells you: smart money just entered, and a reversal may be coming.
+
+Buy-Side Liquidity Sweep (BSL): Price sweeps above a prior high, taking out buy-stop orders, then reverses down. Ironically this often precedes a bullish reversal because smart money was absorbing sell orders.
+
+Sell-Side Liquidity Sweep (SSL): Price sweeps below a prior low, taking out sell-stop orders, then reverses up. Often precedes a bearish move.
+
+When ON: Sweep events are marked directly on the charts so you can see exactly where they occurred.
+When OFF: Sweep markers are hidden from the chart. The SCAN panel still detects sweeps in the background — the toggle only controls the chart visual.`,
+  },
+  {
+    heading: 'MSS — Market Structure Shift',
+    body: `BUTTON: MSS (click to toggle on/off)
+
+Click the MSS button in the header to turn Market Structure Shift markers on or off.
+
+What it is: A Market Structure Shift is when price breaks through a key structural level in the opposite direction — signalling that the current trend is potentially over and a new one is beginning. In the SMC model, MSS is the confirmation that follows a liquidity sweep.
+
+The sequence looks like this:
+1. Price sweeps a liquidity level (takes out stops)
+2. Price then aggressively breaks through the most recent swing high or low in the opposite direction
+3. That break IS the MSS — the market has shifted structure
+
+Why it matters: MSS is your confirmation signal. A sweep alone isn't enough — the MSS tells you the move is real and not just a fakeout. A sweep + MSS together is one of the highest-probability signals in SMC trading.
+
+Bullish MSS: After a sell-side sweep, price breaks above a prior swing high → confirms bullish reversal.
+Bearish MSS: After a buy-side sweep, price breaks below a prior swing low → confirms bearish reversal.
+
+When ON: MSS events are labelled on the chart at the exact candle where the shift occurred.
+When OFF: MSS labels are hidden from the chart view.`,
+  },
+  {
+    heading: 'GRID — Price Grid',
+    body: `BUTTON: GRID (click to toggle on/off)
+
+The GRID button controls whether background price grid lines are shown on the charts.
+
+What it is: Evenly spaced horizontal lines across the chart that serve as visual reference points for reading price levels. Think of it as graph paper behind the candles.
+
+When ON: Subtle grid lines appear across both charts, making it easier to eyeball price distances and align your analysis with specific price levels.
+
+When OFF: Grid lines are hidden, giving the charts a cleaner, minimal look. Some traders prefer no grid to reduce visual noise — especially when using the draw tool for manual level marking.
+
+This is purely a visual preference — it has no effect on detection or analysis. Click to toggle at any time.`,
+  },
+  {
+    heading: 'SESS — Trading Sessions',
+    body: `BUTTON: SESS (click to toggle on/off)
+
+Click the SESS button to turn session markers on or off on the charts.
+
+What it shows: Vertical shaded bands on the chart marking the three major global trading sessions:
+• Asia Session — typically quieter, range-bound price action
+• London Session — often where the day's first major move begins
+• New York Session — highest volume, sharpest moves, most setups
+
+Why it matters: Time of day matters enormously in trading. The best SMC setups — especially sweeps and MSS events — tend to happen during session opens and overlaps (e.g. London open, NY open, London/NY overlap). Knowing which session you're in helps you avoid low-probability setups during dead hours and focus energy when real institutional volume is active.
+
+When ON: Session windows are highlighted as coloured shading across both charts.
+When OFF: Session shading is hidden. Turn it off if you find it visually distracting or if you trade only one session and don't need the context.`,
+  },
+  {
+    heading: 'PRICE Display',
+    body: `BUTTON: PRICE (click to toggle on/off)
+
+The PRICE button controls whether the live price reading is shown in the header of each chart panel.
+
+When ON: The current live price updates in real time next to the timeframe label in each panel header. When you move your crosshair over the chart, the price reading updates to show the price at your cursor position.
+
+When OFF: The price display is hidden from the panel headers. Useful if you want a cleaner, more minimal header bar without the number updating constantly.
+
+This does not affect anything functionally — it's purely a display preference. Click to toggle at any time.`,
+  },
+  {
+    heading: 'Draw Tool (✎)',
+    body: `BUTTON: ✎ (click to toggle draw mode on/off)
+
+The draw tool lets you mark your own horizontal levels directly on the charts. Click the ✎ button to enter draw mode — click it again to exit.
+
+How to draw a line:
+• With draw mode ON, click and drag horizontally on either chart
+• Release to place the line
+• The line stays on both charts at that price level
+
+Move a line:
+• Click and drag any existing line up or down to reposition it
+
+Change line colour:
+• When draw mode is on, a small coloured square appears next to the ✎ button
+• Click it to cycle through available colours: yellow, orange, blue, green, red, white
+• New lines will use the selected colour
+
+Delete all lines:
+• When you have drawn lines, a CLR button appears
+• Click CLR to remove all your drawn lines at once
+
+Persistence:
+• All your drawn lines are automatically saved in your browser
+• They will still be there next time you open the scanner
+• Clearing your browser's localStorage or cache will erase them
+
+Draw mode hint:
+• While in draw mode, the status bar at the bottom shows: "✎ DRAG TO DRAW · DRAG LINE TO MOVE"
+• Exit draw mode when you're done so you don't accidentally add lines while scrolling`,
+  },
+  {
+    heading: 'SCAN Panel',
+    body: `BUTTON: SCAN (click to open/close the panel)
+
+The SCAN panel is the central output of the scanner. Click SCAN in the top-right of the header to open or close it. On mobile it slides in as an overlay — tap the ✕ or tap outside to close it.
+
+What it shows:
+
+BIAS
+The overall market bias based on HTF structure analysis. Values: BULLISH, BEARISH, or NEUTRAL. This tells you which direction the market is currently favouring.
+
+SWEEP
+Whether a liquidity sweep was detected recently. Shows BSL (Buy Side Liquidity sweep — above prior highs) or SSL (Sell Side Liquidity sweep — below prior lows). If no sweep is detected, shows —.
+
+MSS
+Whether a Market Structure Shift has confirmed. Shows the type of MSS or ✓ if confirmed. If no MSS yet, shows —.
+
+FVG
+Whether an active (unfilled) Fair Value Gap is present that aligns with the setup direction. ACTIVE means there's a valid FVG available for entry. — means no qualifying FVG.
+
+SETUP SCORE (e.g. 3/4)
+How many of the 4 conditions are currently met. When all 4 align, a full setup fires.
+
+ACTIVE SETUP
+When all 4 conditions are met, the panel shows BUY or SELL with a score of 4/4. This is your signal. It also displays:
+• SL — calculated Stop Loss level
+• TP1 — first Take Profit target with the R-multiple (e.g. 2.1R)
+
+Important: Not every market condition will produce a setup. The scanner only fires when genuine confluence exists. Patience is part of the strategy.`,
+  },
+  {
+    heading: 'Status Bar (Bottom Strip)',
+    body: `The status bar runs across the very bottom of the screen and is always visible — it gives you a constant at-a-glance read of the current market state without needing to open the SCAN panel.
+
+What it shows (left to right):
+• BIAS — current market direction (bullish/bearish/neutral)
+• SWEEP — whether a sweep was detected and which side (BSL/SSL)
+• MSS — whether structure shift is confirmed
+• FVG — whether a valid fair value gap is active
+• SETUP — current setup status and conditions met count (e.g. BUY 4/4 or NONE 2/4)
+• SL — stop loss level if a setup is active
+• TP1 — take profit level with R-multiple if a setup is active
+
+Colour coding:
+• Green = bullish signal / buy side
+• Red = bearish signal / sell side
+• Orange = sweep detected
+• Yellow = MSS related
+• Grey = inactive / no signal
+
+When no data has loaded yet, it shows "AWAITING DATA..." — this clears once the live feed connects and enough candles are loaded.`,
+  },
+  {
+    heading: 'Settings (⚙)',
+    body: `BUTTON: ⚙ (click to open/close the settings panel)
+
+The settings panel lets you fine-tune how sensitive the scanner's detection algorithms are. Click ⚙ in the header to open it, click again to close.
+
+FVG MIN SIZE
+Sets the minimum price gap size required for a Fair Value Gap to be considered valid. Default is 0 (all gaps count). Increase this to filter out very small, insignificant FVGs and only highlight larger, more meaningful imbalances.
+
+SWEEP BUFFER
+A tolerance value in price units for liquidity sweep detection. Sometimes price doesn't sweep perfectly cleanly — the buffer allows for small deviations when identifying whether a swing point was taken out. Increase it if you find sweeps aren't being detected on your instrument. Default is 0.
+
+SETUP EXPIRY (candles)
+How many candles a detected setup remains valid before being dismissed. Default is 30. If a setup forms but price hasn't reacted within this many candles, the setup is considered expired and cleared. Reduce this number for more aggressive expiry, increase it to keep setups active longer.
+
+Leave all settings at defaults if you're unsure — they're tuned for general use across Deriv synthetic indices. Adjustments are most useful when adapting to a specific symbol's behaviour.`,
+  },
+  {
+    heading: 'Theme (☀ / ◑)',
+    body: `BUTTON: ☀ or ◑ (click to switch theme)
+
+Click the theme button (shows ☀ in dark mode, ◑ in light mode) to toggle between the dark and light colour scheme.
+
+DARK THEME (default)
+Black background with high-contrast coloured indicators. Easier on the eyes during long sessions, especially at night. Bullish candles are bright green, bearish candles are red, overlays are clearly visible.
+
+LIGHT THEME
+Warm off-white / parchment background. Some traders prefer this in bright environments. All overlays and indicators adapt to the light palette automatically.
+
+Your theme preference is saved automatically and restored next time you open the scanner.`,
   },
   {
     heading: 'Troubleshooting',
-    body: `Charts show "LOADING..." forever\n→ Check your internet connection. The scanner uses a live WebSocket — it needs a stable connection.\n\n"DISCONNECTED" in top-right\n→ WebSocket dropped. Refresh the page to reconnect.\n\n"Invalid access code"\n→ Wrong code, expired, or revoked. Contact admin.\n\nNo setups showing in SCAN panel\n→ Normal — setups only appear when all 4 SMC conditions align. Markets aren't always in setup.\n\nLines disappeared\n→ Check if draw mode is still on. Lines are stored in localStorage — clearing browser data will erase them.\n\nNeed more help?\n→ Email: orshengnudor1@gmail.com\n→ X: @orshengnudor_1`,
+    body: `Charts show "LOADING..." and never update
+→ The scanner relies on a live WebSocket connection to Deriv. Check your internet connection and try refreshing the page. If the problem persists, Deriv's servers may be temporarily unavailable.
+
+"DISCONNECTED" shows in the top-right
+→ The WebSocket connection dropped. Refresh the page — it reconnects automatically on load.
+
+"Invalid access code" on login
+→ Double-check the code has no extra spaces. Codes are case-sensitive. If still failing, the code may be expired or revoked — contact admin for a new one.
+
+No setup showing in the SCAN panel
+→ This is completely normal. A setup only fires when all 4 SMC conditions align at the same time: bias + sweep + MSS + FVG. Markets are not always in setup. The scanner is designed to only show high-quality signals — fewer signals is a feature, not a bug. Wait for the market to set up properly.
+
+Session expired / logged out unexpectedly
+→ Your access code has expired. Contact admin for a renewed code.
+
+Drawn lines disappeared
+→ Lines are stored in your browser's localStorage. If you cleared browser data, cookies, or cache, the lines will be gone. Also check that draw mode was properly exited — if draw mode was accidentally left on, you may have moved lines without realising.
+
+The SCAN panel shows 3/4 but no setup fires
+→ One condition is not yet met. Check which item is showing — (—) is the missing one. Common scenario: sweep and MSS detected, but no FVG present at that level, or the FVG has already been filled.
+
+Price seems wrong or frozen
+→ Refresh the page. If the WebSocket reconnects and the countdown timer starts moving, the data is live again.
+
+Need more help?
+→ Email: orshengnudor1@gmail.com
+→ X: @orshengnudor_1`,
   },
 ];
 
