@@ -3,6 +3,7 @@ import { useState, useMemo, useEffect, useRef, useCallback } from 'react';
 // ── Auth gate ──────────────────────────────────────────────────────────────
 const AUTH_URL = 'https://smc-auth.vercel.app';
 const TOKEN_KEY = 'smc_auth_token';
+const TOUR_KEY  = 'smc_tour_done';
 
 function AuthGate({ children }: { children: React.ReactNode }) {
   const [status, setStatus] = useState<'loading' | 'ok' | 'locked'>('loading');
@@ -10,6 +11,7 @@ function AuthGate({ children }: { children: React.ReactNode }) {
   const [err, setErr] = useState('');
   const [busy, setBusy] = useState(false);
   const [showPw, setShowPw] = useState(false);
+  const [firstLogin, setFirstLogin] = useState(false);
 
   useEffect(() => {
     const token = localStorage.getItem(TOKEN_KEY);
@@ -39,6 +41,8 @@ function AuthGate({ children }: { children: React.ReactNode }) {
       if (res.ok) {
         const d = await res.json() as { token: string };
         localStorage.setItem(TOKEN_KEY, d.token);
+        const tourDone = localStorage.getItem(TOUR_KEY);
+        if (!tourDone) setFirstLogin(true);
         setStatus('ok');
       } else {
         setErr('Invalid access code');
@@ -119,14 +123,330 @@ function AuthGate({ children }: { children: React.ReactNode }) {
               {busy ? 'Verifying...' : 'Enter'}
             </button>
           </div>
-          <div style={{ color: '#6b7280', fontSize: 10, marginTop: 20 }}>Contact admin for access</div>
+          <div style={{ color: '#6b7280', fontSize: 10, marginTop: 20 }}>
+            Contact admin for access
+          </div>
         </div>
       </div>
     );
   }
 
-  return <>{children}</>;
+  return (
+    <>
+      {children}
+      {firstLogin && <OnboardingTour onDone={() => setFirstLogin(false)} />}
+    </>
+  );
 }
+
+// ── Onboarding Tour ────────────────────────────────────────────────────────
+
+const TOUR_STEPS = [
+  {
+    title: 'Welcome to SMC Scanner',
+    body: 'This is your Smart Money Concept (SMC) trading scanner. It monitors real-time price action and automatically detects key market structures to help you identify high-probability trade setups.',
+    anchor: null,
+  },
+  {
+    title: 'Symbol & Timeframe Selector',
+    body: 'Use the dropdown at the top-left to select your trading symbol (e.g. Volatility 75). HTF is your Higher Time Frame for bias — set it to a bigger candle period. LTF is your Lower Time Frame for entry — set it smaller.',
+    anchor: 'header',
+  },
+  {
+    title: 'SINGLE & LIVE Mode',
+    body: 'SINGLE mode shows only the last closed HTF candle and its corresponding LTF candles — perfect for zoomed-in entry analysis. Enable LIVE to also show the currently forming candle in real time.',
+    anchor: 'header',
+  },
+  {
+    title: 'Overlay Toggles (CRT, FVG, SWEEP, MSS)',
+    body: 'These buttons control what gets drawn on the charts:\n• CRT — Candle Range Theory levels (key HTF price zones)\n• FVG — Fair Value Gaps (imbalances price tends to fill)\n• SWEEP — Liquidity sweeps (stop-hunt wicks)\n• MSS — Market Structure Shifts (trend change signals)\n• GRID — Price grid\n• SESS — Trading sessions (London, NY, Asia)',
+    anchor: 'header',
+  },
+  {
+    title: 'Draw Tool',
+    body: 'Click the ✎ button to enter draw mode. Drag on either chart to draw horizontal lines. Click the color swatch to cycle through colors. Use CLR to clear all lines. Lines persist across sessions.',
+    anchor: 'header',
+  },
+  {
+    title: 'HTF & LTF Charts',
+    body: 'The left panel is your Higher Time Frame chart — used to read overall bias and structure. The right panel is your Lower Time Frame — used to time your entry. Both update live via Deriv WebSocket feed.',
+    anchor: null,
+  },
+  {
+    title: 'SCAN Panel',
+    body: 'The SCAN sidebar (toggle via SCAN button top-right) shows the auto-detected setup status: market bias, whether a liquidity sweep occurred, if MSS is confirmed, and if a valid FVG is present. When all 4 conditions align — a setup is confirmed with SL and TP levels.',
+    anchor: 'scan',
+  },
+  {
+    title: 'Status Bar',
+    body: 'The bottom bar gives you a quick read at a glance: BIAS, SWEEP, MSS, FVG, active SETUP type, and trade zones (SL / TP1 with R-multiple). Green = bullish signal, red = bearish.',
+    anchor: 'statusbar',
+  },
+  {
+    title: 'Settings & Theme',
+    body: 'Click ⚙ to adjust scanner sensitivity (FVG min size, sweep buffer, setup expiry). Click ☀/◑ to toggle light/dark theme. All your preferences are saved automatically.',
+    anchor: 'header',
+  },
+  {
+    title: "You're all set",
+    body: "That's the full tour. You can revisit this guide anytime by clicking the ? button in the top-right header.\n\nFor support, reach out:\n• Email: orshengnudor1@gmail.com\n• X: @orshengnudor_1",
+    anchor: null,
+  },
+];
+
+function OnboardingTour({ onDone }: { onDone: () => void }) {
+  const [step, setStep] = useState(0);
+  const total = TOUR_STEPS.length;
+  const current = TOUR_STEPS[step];
+
+  const finish = () => {
+    localStorage.setItem(TOUR_KEY, '1');
+    onDone();
+  };
+
+  const next = () => {
+    if (step < total - 1) setStep(s => s + 1);
+    else finish();
+  };
+
+  const prev = () => { if (step > 0) setStep(s => s - 1); };
+
+  return (
+    <div style={{
+      position: 'fixed', inset: 0, zIndex: 9999,
+      background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(2px)',
+      display: 'flex', alignItems: 'center', justifyContent: 'center',
+      padding: 20, fontFamily: "'JetBrains Mono', monospace",
+    }}>
+      <div style={{
+        width: '100%', maxWidth: 480,
+        background: '#12121a', border: '1px solid #818cf8',
+        padding: 28, position: 'relative',
+        boxShadow: '0 0 40px rgba(129,140,248,0.15)',
+      }}>
+        {/* Step counter */}
+        <div style={{
+          display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+          marginBottom: 20,
+        }}>
+          <div style={{ display: 'flex', gap: 5 }}>
+            {Array.from({ length: total }).map((_, i) => (
+              <div key={i} style={{
+                width: i === step ? 18 : 6, height: 4, borderRadius: 2,
+                background: i === step ? '#818cf8' : i < step ? '#3b3b5c' : '#1e1e2e',
+                transition: 'width 0.2s, background 0.2s',
+              }} />
+            ))}
+          </div>
+          <span style={{ color: '#6b7280', fontSize: 10, letterSpacing: 1 }}>
+            {step + 1} / {total}
+          </span>
+        </div>
+
+        {/* Content */}
+        <div style={{ color: '#818cf8', fontSize: 10, letterSpacing: 2, marginBottom: 8, textTransform: 'uppercase' }}>
+          {step === 0 ? 'Getting Started' : `Step ${step} of ${total - 1}`}
+        </div>
+        <div style={{ color: '#e2e2f0', fontSize: 15, fontWeight: 700, letterSpacing: 0.5, marginBottom: 14 }}>
+          {current.title}
+        </div>
+        <div style={{
+          color: '#9ca3af', fontSize: 12, lineHeight: 1.7,
+          whiteSpace: 'pre-line', marginBottom: 28,
+        }}>
+          {current.body}
+        </div>
+
+        {/* Buttons */}
+        <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+          {step > 0 && (
+            <button onClick={prev} style={{
+              background: 'transparent', border: '1px solid #1e1e2e',
+              color: '#6b7280', fontFamily: "'JetBrains Mono', monospace",
+              fontSize: 10, padding: '8px 16px', cursor: 'pointer',
+              letterSpacing: 1, textTransform: 'uppercase',
+            }}>← Prev</button>
+          )}
+          <div style={{ flex: 1 }} />
+          <button onClick={finish} style={{
+            background: 'transparent', border: 'none',
+            color: '#4b5563', fontFamily: "'JetBrains Mono', monospace",
+            fontSize: 10, cursor: 'pointer', letterSpacing: 1,
+            textDecoration: 'underline',
+          }}>Skip tour</button>
+          <button onClick={next} style={{
+            background: '#818cf8', border: '1px solid #818cf8',
+            color: '#fff', fontFamily: "'JetBrains Mono', monospace",
+            fontSize: 10, padding: '8px 20px', cursor: 'pointer',
+            letterSpacing: 1, textTransform: 'uppercase',
+          }}>
+            {step === total - 1 ? 'Done ✓' : 'Next →'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Docs Modal ─────────────────────────────────────────────────────────────
+
+const DOC_SECTIONS = [
+  {
+    heading: 'What is SMC Scanner?',
+    body: `SMC Scanner is a real-time trading analysis tool built on Smart Money Concept (SMC) principles. It connects to the Deriv live feed and automatically detects key market structures — liquidity sweeps, fair value gaps, market structure shifts, and CRT levels — to help you identify high-probability trade setups.`,
+  },
+  {
+    heading: 'Getting Access',
+    body: `SMC Scanner is access-controlled. You need an access code from the admin to log in.\n\n• The admin has full authority over who can access the platform\n• Access codes can have expiry dates\n• If your code stops working, contact the admin for a renewal\n• To request access: Email orshengnudor1@gmail.com or DM @orshengnudor_1 on X`,
+  },
+  {
+    heading: 'Logging In',
+    body: `1. Open smc-scanner-web.vercel.app\n2. You'll be prompted for an access code\n3. Enter the code provided by the admin\n4. You're in — your session is saved, you won't need to log in again unless it expires\n\nIf you see "Invalid access code" — double-check you copied it correctly (no spaces). If it still fails, the code may be expired or revoked.`,
+  },
+  {
+    heading: 'Reading the Charts',
+    body: `The interface has two chart panels side by side:\n\n• Left panel = HTF (Higher Time Frame) — shows the big picture. Used to determine market bias (bullish or bearish) and key levels\n• Right panel = LTF (Lower Time Frame) — shows entry precision. Used to time your entry after HTF confirms structure\n\nBoth charts update live. The countdown timer in each panel header shows how many seconds remain until the current candle closes.`,
+  },
+  {
+    heading: 'Overlay Indicators',
+    body: `Toggle these from the header buttons:\n\n• CRT — Candle Range Theory levels. Key price zones derived from the last closed HTF candle\n• FVG — Fair Value Gap. An imbalance zone between three candles that price often revisits\n• SWEEP — Liquidity sweep. A wick that took out a prior high/low (stop hunt) before reversing\n• MSS — Market Structure Shift. When price breaks structure in the opposite direction — signals a trend change\n• GRID — Price grid lines for visual reference\n• SESS — Session markers (London, New York, Asia) — useful for timing entries`,
+  },
+  {
+    heading: 'The SCAN Panel',
+    body: `Click "SCAN" in the top-right to open the setup panel. It shows:\n\n• BIAS — overall market direction based on HTF structure\n• SWEEP — whether a liquidity sweep was detected and which side (Buy Side / Sell Side)\n• MSS — whether a market structure shift has confirmed\n• FVG — whether an active fair value gap is present\n• SETUP — when all 4 conditions align, a BUY or SELL setup is active with SL and TP1 levels\n\nThe setup score (e.g. 3/4) tells you how many conditions are currently met.`,
+  },
+  {
+    heading: 'Drawing Lines',
+    body: `Click the ✎ button in the header to enter draw mode:\n\n• Drag horizontally on either chart to draw a line\n• Click the colored square to cycle through line colors\n• Drag an existing line up/down to reposition it\n• Click CLR to clear all drawn lines\n• Lines are saved across sessions automatically`,
+  },
+  {
+    heading: 'SINGLE Mode',
+    body: `SINGLE mode restricts the HTF chart to show only the last closed candle, and the LTF chart to show only the candles that fall within that HTF candle's time range.\n\nThis is useful for zooming into a specific candle's internal price action without the noise of the full chart. Enable LIVE to also show the currently forming candle alongside the last closed one.`,
+  },
+  {
+    heading: 'Settings',
+    body: `Click ⚙ to open scanner settings:\n\n• FVG Min Size — minimum gap size to be considered a valid FVG (filter out tiny gaps)\n• Sweep Buffer — tolerance in price units for sweep detection\n• Setup Expiry — how many candles a detected setup remains valid before being dismissed\n\nLeave at defaults if unsure — they're tuned for general use.`,
+  },
+  {
+    heading: 'Troubleshooting',
+    body: `Charts show "LOADING..." forever\n→ Check your internet connection. The scanner uses a live WebSocket — it needs a stable connection.\n\n"DISCONNECTED" in top-right\n→ WebSocket dropped. Refresh the page to reconnect.\n\n"Invalid access code"\n→ Wrong code, expired, or revoked. Contact admin.\n\nNo setups showing in SCAN panel\n→ Normal — setups only appear when all 4 SMC conditions align. Markets aren't always in setup.\n\nLines disappeared\n→ Check if draw mode is still on. Lines are stored in localStorage — clearing browser data will erase them.\n\nNeed more help?\n→ Email: orshengnudor1@gmail.com\n→ X: @orshengnudor_1`,
+  },
+];
+
+function DocsModal({ onClose, T }: { onClose: () => void; T: typeof DARK_THEME }) {
+  const [active, setActive] = useState(0);
+
+  return (
+    <div style={{
+      position: 'fixed', inset: 0, zIndex: 9000,
+      background: 'rgba(0,0,0,0.8)', backdropFilter: 'blur(3px)',
+      display: 'flex', alignItems: 'stretch', justifyContent: 'center',
+      fontFamily: "'JetBrains Mono', monospace",
+    }}>
+      <div style={{
+        width: '100%', maxWidth: 820,
+        background: T.surface, border: `1px solid ${T.border}`,
+        display: 'flex', flexDirection: 'column',
+        margin: '20px 16px',
+        boxShadow: '0 0 60px rgba(0,0,0,0.5)',
+        overflow: 'hidden',
+      }}>
+        {/* Header */}
+        <div style={{
+          height: 48, borderBottom: `1px solid ${T.border}`,
+          display: 'flex', alignItems: 'center',
+          padding: '0 20px', gap: 12, flexShrink: 0,
+          background: T.bg,
+        }}>
+          <span style={{ color: T.bull, fontSize: 11, fontWeight: 700, letterSpacing: 2 }}>SMC▸</span>
+          <span style={{ color: T.border }}>|</span>
+          <span style={{ color: T.text, fontSize: 11, letterSpacing: 1 }}>DOCS & HELP</span>
+          <div style={{ flex: 1 }} />
+          <button onClick={onClose} style={{
+            background: 'transparent', border: `1px solid ${T.border}`,
+            color: T.label, fontFamily: "'JetBrains Mono', monospace",
+            fontSize: 10, padding: '4px 12px', cursor: 'pointer', letterSpacing: 1,
+          }}>✕ CLOSE</button>
+        </div>
+
+        <div style={{ flex: 1, display: 'flex', overflow: 'hidden', minHeight: 0 }}>
+          {/* Sidebar nav */}
+          <div style={{
+            width: 200, borderRight: `1px solid ${T.border}`,
+            display: 'flex', flexDirection: 'column',
+            overflowY: 'auto', flexShrink: 0,
+            background: T.bg,
+          }}>
+            {DOC_SECTIONS.map((s, i) => (
+              <button key={i} onClick={() => setActive(i)} style={{
+                background: i === active ? `${T.accent}22` : 'transparent',
+                border: 'none',
+                borderLeft: i === active ? `2px solid ${T.accent}` : '2px solid transparent',
+                color: i === active ? T.text : T.label,
+                fontFamily: "'JetBrains Mono', monospace",
+                fontSize: 10, padding: '10px 14px',
+                cursor: 'pointer', letterSpacing: 0.3,
+                textAlign: 'left', lineHeight: 1.4,
+                width: '100%',
+              }}>
+                {s.heading}
+              </button>
+            ))}
+          </div>
+
+          {/* Content */}
+          <div style={{
+            flex: 1, overflowY: 'auto', padding: '28px 28px',
+          }}>
+            <div style={{ color: T.accent, fontSize: 10, letterSpacing: 2, marginBottom: 10, textTransform: 'uppercase' }}>
+              Documentation
+            </div>
+            <div style={{ color: T.text, fontSize: 15, fontWeight: 700, letterSpacing: 0.5, marginBottom: 18 }}>
+              {DOC_SECTIONS[active].heading}
+            </div>
+            <div style={{
+              color: '#9ca3af', fontSize: 12, lineHeight: 1.9,
+              whiteSpace: 'pre-line',
+            }}>
+              {DOC_SECTIONS[active].body}
+            </div>
+
+            {/* Nav buttons */}
+            <div style={{ display: 'flex', gap: 10, marginTop: 36 }}>
+              {active > 0 && (
+                <button onClick={() => setActive(a => a - 1)} style={{
+                  background: 'transparent', border: `1px solid ${T.border}`,
+                  color: T.label, fontFamily: "'JetBrains Mono', monospace",
+                  fontSize: 10, padding: '7px 16px', cursor: 'pointer', letterSpacing: 1,
+                }}>← Previous</button>
+              )}
+              <div style={{ flex: 1 }} />
+              {active < DOC_SECTIONS.length - 1 && (
+                <button onClick={() => setActive(a => a + 1)} style={{
+                  background: T.accent, border: `1px solid ${T.accent}`,
+                  color: '#fff', fontFamily: "'JetBrains Mono', monospace",
+                  fontSize: 10, padding: '7px 16px', cursor: 'pointer', letterSpacing: 1,
+                }}>Next →</button>
+              )}
+            </div>
+
+            {/* Footer */}
+            <div style={{
+              marginTop: 40, paddingTop: 20,
+              borderTop: `1px solid ${T.border}`,
+              color: T.label, fontSize: 10, lineHeight: 1.8,
+            }}>
+              Need help? Reach out:<br />
+              Email: <span style={{ color: T.accent }}>orshengnudor1@gmail.com</span>&nbsp;&nbsp;|&nbsp;&nbsp;
+              X: <span style={{ color: T.accent }}>@orshengnudor_1</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 import CandleChart, { type OverlayToggles, type DrawnLine, type Theme } from '../components/CandleChart';
 import SetupPanel, { type AlertEntry } from '../components/SetupPanel';
 import AlertBanner from '../components/AlertBanner';
@@ -252,6 +572,7 @@ function Scanner() {
   const [setupStatus, setSetupStatus] = useState<SetupStatus | null>(null);
   const [settings, setSettings] = useState<ScannerSettings>(DEFAULT_SETTINGS);
   const [showSettings, setShowSettings] = useState(false);
+  const [showDocs, setShowDocs] = useState(false);
   const [alertLog, setAlertLog] = useState<AlertEntry[]>([]);
   const [scannerOpen, setScannerOpen] = useState(() => window.innerWidth >= 768);
   const [isMobile, setIsMobile] = useState(() => window.innerWidth < 768);
@@ -328,7 +649,6 @@ function Scanner() {
   const htfDisplayCandles = useMemo(() => {
     if (htfMode === 'single') {
       if (htfCandles.length >= 2) {
-        // last closed candle + optionally the live forming candle
         return showLiveCandle ? htfCandles.slice(-2) : htfCandles.slice(-2, -1);
       }
       return htfCandles.slice(-1);
@@ -449,6 +769,10 @@ function Scanner() {
 
         <div style={{ flex: 1 }} />
 
+        {/* Docs button */}
+        <ToggleBtn T={T} label="?" active={showDocs} color={T.mss} onClick={() => setShowDocs(d => !d)} />
+        <Divider T={T} />
+
         <ToggleBtn T={T} label={dark ? '☀' : '◑'} active={false} onClick={() => setDark(d => !d)} />
         <Divider T={T} />
 
@@ -563,7 +887,6 @@ function Scanner() {
         {/* Scanner sidebar — overlay on mobile, inline on desktop */}
         {scannerOpen && (
           <>
-            {/* Mobile backdrop */}
             {isMobile && (
               <div
                 onClick={() => setScannerOpen(false)}
@@ -585,7 +908,6 @@ function Scanner() {
               flexShrink: 0, display: 'flex', flexDirection: 'column',
               background: T.surface, overflow: 'hidden',
             }}>
-              {/* Mobile close button */}
               {isMobile && (
                 <button
                   onClick={() => setScannerOpen(false)}
@@ -654,6 +976,9 @@ function Scanner() {
       </div>
 
       <AlertBanner status={setupStatus} onNewAlert={handleNewAlert} />
+
+      {/* Docs modal */}
+      {showDocs && <DocsModal onClose={() => setShowDocs(false)} T={T} />}
     </div>
   );
 }
@@ -750,7 +1075,6 @@ function PanelHeader({ T, title, subtitle, loading, price, priceColor, countdown
           {price > 1000 ? price.toFixed(2) : price > 10 ? price.toFixed(3) : price.toFixed(4)}
         </span>
       )}
-      {/* Mobile quick-toggles */}
       {mobileControls && (
         <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginLeft: 4 }}>
           {mobileControls}
