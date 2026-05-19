@@ -462,7 +462,7 @@ export type LiquidityStack = {
 export function detectLiquidityStacks(
   candles: Candle[],
   lookback = 3,
-  tolerancePct = 0.15          // % of price — 0.15% works well for VIX synthetics
+  tolerancePct = 0.08          // % of price — tighter to avoid noise
 ): LiquidityStack[] {
   if (candles.length < lookback * 2 + 2) return [];
 
@@ -487,7 +487,7 @@ export function detectLiquidityStacks(
         usedH.add(j);
       }
     }
-    if (cluster.length >= 2) {
+    if (cluster.length >= 3) {
       const prices = cluster.map(c => c.price);
       const hi = Math.max(...prices);
       const lo = Math.min(...prices);
@@ -523,7 +523,7 @@ export function detectLiquidityStacks(
         usedL.add(j);
       }
     }
-    if (cluster.length >= 2) {
+    if (cluster.length >= 3) {
       const prices = cluster.map(c => c.price);
       const hi = Math.max(...prices);
       const lo = Math.min(...prices);

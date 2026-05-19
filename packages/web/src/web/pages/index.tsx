@@ -982,12 +982,12 @@ function Scanner() {
   );
 
   const htfLiqStacks = useMemo(
-    () => detectLiquidityStacks(htfCandles),
+    () => detectLiquidityStacks(htfCandles).sort((a, b) => b.count - a.count).slice(0, 5),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [htfLen]
   );
   const ltfLiqStacks = useMemo(
-    () => detectLiquidityStacks(ltfCandles),
+    () => detectLiquidityStacks(ltfCandles).sort((a, b) => b.count - a.count).slice(0, 5),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [ltfLen]
   );
