@@ -166,6 +166,7 @@ const CandleChart = forwardRef<ChartHandle, Props>(({
   sweeps = [],
   mssEvents = [],
   crtLevel,
+  liquidityStacks = [],
   overlays,
   height = 400,
   theme,
