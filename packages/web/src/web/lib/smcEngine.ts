@@ -441,3 +441,108 @@ export function validateSetup(
     tradeZones,
   };
 }
+
+// ── Liquidity Stack Detection ─────────────────────────────────────────────────
+// A liquidity stack is a cluster of swing highs OR swing lows that sit within
+// a tight price band (tolerance = 0.15% of price by default). These are zones
+// where stop-losses and pending orders pool together — high-value targets.
+
+export type LiquidityStack = {
+  id: string;
+  type: 'highs' | 'lows';       // cluster of swing highs or swing lows
+  priceHigh: number;             // top of the cluster band
+  priceLow: number;              // bottom of the cluster band
+  midPrice: number;              // centre of the cluster
+  count: number;                 // how many levels are stacked
+  levels: Array<{ price: number; time: number }>; // individual levels
+  touched: boolean;              // price has entered the zone
+  time: number;                  // time of the most recent level in cluster
+};
+
+export function detectLiquidityStacks(
+  candles: Candle[],
+  lookback = 3,
+  tolerancePct = 0.15          // % of price — 0.15% works well for VIX synthetics
+): LiquidityStack[] {
+  if (candles.length < lookback * 2 + 2) return [];
+
+  const swingHighs = getSwingHighsPublic(candles, lookback);
+  const swingLows  = getSwingLowsPublic(candles, lookback);
+  const lastPrice  = candles[candles.length - 1].close;
+  const tol        = lastPrice * (tolerancePct / 100);
+
+  const stacks: LiquidityStack[] = [];
+
+  // Cluster swing highs
+  const usedH = new Set<number>();
+  for (let i = 0; i < swingHighs.length; i++) {
+    if (usedH.has(i)) continue;
+    const anchor = swingHighs[i];
+    const cluster = [anchor];
+    usedH.add(i);
+    for (let j = i + 1; j < swingHighs.length; j++) {
+      if (usedH.has(j)) continue;
+      if (Math.abs(swingHighs[j].price - anchor.price) <= tol) {
+        cluster.push(swingHighs[j]);
+        usedH.add(j);
+      }
+    }
+    if (cluster.length >= 2) {
+      const prices = cluster.map(c => c.price);
+      const hi = Math.max(...prices);
+      const lo = Math.min(...prices);
+      const mid = (hi + lo) / 2;
+      const latest = cluster.reduce((a, b) => b.time > a.time ? b : a);
+      // check if price has already touched this zone
+      const touched = candles.some(c => c.high >= lo && c.low <= hi && c.time > latest.time);
+      stacks.push({
+        id: `liqstack-H-${latest.time}`,
+        type: 'highs',
+        priceHigh: hi + tol * 0.3,   // slight buffer above
+        priceLow:  lo - tol * 0.3,
+        midPrice: mid,
+        count: cluster.length,
+        levels: cluster,
+        touched,
+        time: latest.time,
+      });
+    }
+  }
+
+  // Cluster swing lows
+  const usedL = new Set<number>();
+  for (let i = 0; i < swingLows.length; i++) {
+    if (usedL.has(i)) continue;
+    const anchor = swingLows[i];
+    const cluster = [anchor];
+    usedL.add(i);
+    for (let j = i + 1; j < swingLows.length; j++) {
+      if (usedL.has(j)) continue;
+      if (Math.abs(swingLows[j].price - anchor.price) <= tol) {
+        cluster.push(swingLows[j]);
+        usedL.add(j);
+      }
+    }
+    if (cluster.length >= 2) {
+      const prices = cluster.map(c => c.price);
+      const hi = Math.max(...prices);
+      const lo = Math.min(...prices);
+      const mid = (hi + lo) / 2;
+      const latest = cluster.reduce((a, b) => b.time > a.time ? b : a);
+      const touched = candles.some(c => c.high >= lo && c.low <= hi && c.time > latest.time);
+      stacks.push({
+        id: `liqstack-L-${latest.time}`,
+        type: 'lows',
+        priceHigh: hi + tol * 0.3,
+        priceLow:  lo - tol * 0.3,
+        midPrice: mid,
+        count: cluster.length,
+        levels: cluster,
+        touched,
+        time: latest.time,
+      });
+    }
+  }
+
+  return stacks;
+}

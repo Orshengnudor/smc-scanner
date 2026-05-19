@@ -1,0 +1,35 @@
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&display=swap');
+@import "tailwindcss";
+@import "tw-animate-css";
+
+@custom-variant dark (&:is(.dark *));
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html, body, #root {
+  height: 100%;
+  width: 100%;
+  overflow: hidden;
+  background: #000000;
+  color: #ffffff;
+  font-family: 'JetBrains Mono', 'Courier New', monospace;
+}
+
+/* Scrollbar */
+::-webkit-scrollbar { width: 4px; height: 4px; }
+::-webkit-scrollbar-track { background: #000; }
+::-webkit-scrollbar-thumb { background: #1e1e1e; }
+::-webkit-scrollbar-thumb:hover { background: #333; }
+
+/* Select styling */
+select option {
+  background: #0f0f0f;
+  color: #fff;
+}
+
+/* Remove focus outlines, we handle them manually */
+button:focus, select:focus { outline: none; }

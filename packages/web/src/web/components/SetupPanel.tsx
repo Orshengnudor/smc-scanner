@@ -5,7 +5,7 @@ import { COLORS } from '../lib/constants';
 export type AlertEntry = {
   id: string;
   message: string;
-  type: 'sweep' | 'mss' | 'setup';
+  type: 'sweep' | 'mss' | 'setup' | 'liq_stack';
   time: number;
 };
 
@@ -62,6 +62,7 @@ function formatTime(ts: number) {
 function alertColor(type: AlertEntry['type']) {
   if (type === 'setup') return COLORS.bull;
   if (type === 'sweep') return COLORS.sweep;
+  if (type === 'liq_stack') return 'rgba(255,180,0,1)';
   return COLORS.mss;
 }
 

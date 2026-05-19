@@ -12,7 +12,7 @@ import {
   LineStyle,
 } from 'lightweight-charts';
 import type { Candle } from '../lib/derivWS';
-import type { FVG, LiquiditySweep, MSS, CRTLevel } from '../lib/smcEngine';
+import type { FVG, LiquiditySweep, MSS, CRTLevel, LiquidityStack } from '../lib/smcEngine';
 
 export type OverlayToggles = {
   crtLevels: boolean;
@@ -22,6 +22,7 @@ export type OverlayToggles = {
   grid: boolean;
   crossLines: boolean;
   sessions: boolean;
+  liqStacks: boolean;
 };
 
 export type DrawnLine = {
@@ -63,6 +64,7 @@ type Props = {
   sweeps?: LiquiditySweep[];
   mssEvents?: MSS[];
   crtLevel?: CRTLevel | null;
+  liquidityStacks?: LiquidityStack[];
   overlays: OverlayToggles;
   height?: number;
   theme: Theme;
@@ -517,6 +519,55 @@ const CandleChart = forwardRef<ChartHandle, Props>(({
           overlaySeriesRef.current.push(s);
         });
       }
+
+      if (overlays.liqStacks && liquidityStacks && liquidityStacks.length > 0) {
+        liquidityStacks.forEach(stack => {
+          // Highs stacks = bearish liquidity (above price) → amber/orange
+          // Lows stacks  = bullish liquidity (below price) → purple/violet
+          const isHighs = stack.type === 'highs';
+          const zoneColor  = isHighs ? 'rgba(255,180,0,0.18)'   : 'rgba(160,80,255,0.18)';
+          const lineColor  = isHighs ? 'rgba(255,180,0,0.85)'   : 'rgba(160,80,255,0.85)';
+          const dimColor   = isHighs ? 'rgba(255,180,0,0.35)'   : 'rgba(160,80,255,0.35)';
+          const stackStart = Math.max(stack.time, firstTime);
+          const topPts = safeLineData(stackStart, lastTime, stack.priceHigh);
+          const botPts = safeLineData(stackStart, lastTime, stack.priceLow);
+          const midPts = safeLineData(stackStart, lastTime, stack.midPrice);
+          if (!topPts || !botPts || !midPts) return;
+
+          // Top boundary
+          const sTop = chart.addSeries(LineSeries, {
+            color: stack.touched ? dimColor : lineColor,
+            lineWidth: 1,
+            lineStyle: LineStyle.Dashed,
+            priceLineVisible: false, lastValueVisible: false, crosshairMarkerVisible: false,
+          });
+          sTop.setData(topPts);
+          overlaySeriesRef.current.push(sTop);
+
+          // Bottom boundary
+          const sBot = chart.addSeries(LineSeries, {
+            color: stack.touched ? dimColor : lineColor,
+            lineWidth: 1,
+            lineStyle: LineStyle.Dashed,
+            priceLineVisible: false, lastValueVisible: false, crosshairMarkerVisible: false,
+          });
+          sBot.setData(botPts);
+          overlaySeriesRef.current.push(sBot);
+
+          // Mid line — labelled with count
+          const sMid = chart.addSeries(LineSeries, {
+            color: stack.touched ? dimColor : zoneColor.replace('0.18', '0.0'),
+            lineWidth: 1,
+            lineStyle: LineStyle.Solid,
+            priceLineVisible: false,
+            lastValueVisible: true,
+            crosshairMarkerVisible: false,
+            title: `${isHighs ? 'EQH' : 'EQL'} ×${stack.count}`,
+          });
+          sMid.setData(midPts);
+          overlaySeriesRef.current.push(sMid);
+        });
+      }
     }
 
     if (overlays.mss && mssEvents.length > 0) {
@@ -533,8 +584,8 @@ const CandleChart = forwardRef<ChartHandle, Props>(({
     }
     } catch (e) { console.warn('overlay render error', e); }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [candles, fvgs, sweeps, mssEvents, crtLevel,
-      overlays.crtLevels, overlays.fvg, overlays.sweep, overlays.mss,
+  }, [candles, fvgs, sweeps, mssEvents, crtLevel, liquidityStacks,
+      overlays.crtLevels, overlays.fvg, overlays.sweep, overlays.mss, overlays.liqStacks,
       theme.bull, theme.bear, theme.crt, theme.sweep, theme.mss]);
 
   // ── Redraw when drawnLines/drawMode change ────────────────────────────────

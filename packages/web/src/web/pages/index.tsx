@@ -794,8 +794,10 @@ import {
   detectMSS,
   getLastClosedCRTLevel,
   validateSetup,
+  detectLiquidityStacks,
   type SetupStatus,
   type ScannerSettings,
+  type LiquidityStack,
 } from '../lib/smcEngine';
 import {
   SYMBOLS,
@@ -887,7 +889,7 @@ function Scanner() {
   const [showLiveCandle, setShowLiveCandle] = useState<boolean>(() => lsGet('smc_showLive', false));
   const [showHtfPrice, setShowHtfPrice] = useState<boolean>(() => lsGet('smc_showPrice', true));
   const [overlays, setOverlays] = useState<OverlayToggles>(() => lsGet('smc_overlays', {
-    crtLevels: true, fvg: true, sweep: true, mss: true, grid: true, crossLines: true, sessions: true,
+    crtLevels: true, fvg: true, sweep: true, mss: true, grid: true, crossLines: true, sessions: true, liqStacks: true,
   }));
   const [drawnLines, setDrawnLines] = useState<DrawnLine[]>(() => lsGet('smc_lines', []));
 
@@ -979,6 +981,17 @@ function Scanner() {
     [htfLen]
   );
 
+  const htfLiqStacks = useMemo(
+    () => detectLiquidityStacks(htfCandles),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [htfLen]
+  );
+  const ltfLiqStacks = useMemo(
+    () => detectLiquidityStacks(ltfCandles),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [ltfLen]
+  );
+
   // HTF display candles
   const htfDisplayCandles = useMemo(() => {
     if (htfMode === 'single') {
@@ -1016,6 +1029,37 @@ function Scanner() {
   const handleNewAlert = useCallback((alert: AlertEntry) => {
     setAlertLog(prev => [alert, ...prev].slice(0, 50));
   }, []);
+
+  // ── Liquidity Stack proximity alert ───────────────────────────────────────
+  const firedStackAlertsRef = useRef<Set<string>>(new Set());
+  useEffect(() => {
+    if (ltfCandles.length === 0) return;
+    const currentPrice = ltfCandles[ltfCandles.length - 1].close;
+    const allStacks = [...ltfLiqStacks, ...htfLiqStacks];
+    for (const stack of allStacks) {
+      if (stack.touched) continue; // already raided
+      const inZone = currentPrice >= stack.priceLow && currentPrice <= stack.priceHigh;
+      const approaching = !inZone && (
+        Math.abs(currentPrice - stack.midPrice) / currentPrice < 0.003 // within 0.3%
+      );
+      if ((inZone || approaching) && !firedStackAlertsRef.current.has(stack.id)) {
+        firedStackAlertsRef.current.add(stack.id);
+        const side = stack.type === 'highs' ? 'SSL' : 'BSL';
+        const action = inZone ? 'ENTERING' : 'APPROACHING';
+        handleNewAlert({
+          id: `liqstack-alert-${stack.id}-${Date.now()}`,
+          message: `${action} ${side} STACK ×${stack.count} @ ${stack.midPrice.toFixed(2)}`,
+          type: 'liq_stack',
+          time: Date.now(),
+        });
+      }
+      // Reset fired flag once price moves away (so it can alert again next approach)
+      if (!inZone && !approaching) {
+        firedStackAlertsRef.current.delete(stack.id);
+      }
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ltfLen, ltfLiqStacks, htfLiqStacks]);
 
   const handleLinesChange = useCallback((lines: DrawnLine[]) => {
     setDrawnLines(lines);
@@ -1078,11 +1122,12 @@ function Scanner() {
 
         <Label T={T}>SHOW</Label>
         <ToggleBtn T={T} label="CRT"   active={overlays.crtLevels} color={T.crt}   onClick={() => toggleOverlay('crtLevels')} />
-        <ToggleBtn T={T} label="FVG"   active={overlays.fvg}       color={T.bull}  onClick={() => toggleOverlay('fvg')} />
-        <ToggleBtn T={T} label="SWEEP" active={overlays.sweep}     color={T.sweep} onClick={() => toggleOverlay('sweep')} />
-        <ToggleBtn T={T} label="MSS"   active={overlays.mss}       color={T.mss}   onClick={() => toggleOverlay('mss')} />
-        <ToggleBtn T={T} label="GRID"  active={overlays.grid}                      onClick={() => toggleOverlay('grid')} />
-        <ToggleBtn T={T} label="SESS"  active={overlays.sessions} color="#00cc77"  onClick={() => toggleOverlay('sessions')} />
+        <ToggleBtn T={T} label="FVG"    active={overlays.fvg}        color={T.bull}           onClick={() => toggleOverlay('fvg')} />
+        <ToggleBtn T={T} label="SWEEP"  active={overlays.sweep}      color={T.sweep}          onClick={() => toggleOverlay('sweep')} />
+        <ToggleBtn T={T} label="MSS"    active={overlays.mss}        color={T.mss}            onClick={() => toggleOverlay('mss')} />
+        <ToggleBtn T={T} label="GRID"   active={overlays.grid}                                onClick={() => toggleOverlay('grid')} />
+        <ToggleBtn T={T} label="SESS"   active={overlays.sessions}   color="#00cc77"          onClick={() => toggleOverlay('sessions')} />
+        <ToggleBtn T={T} label="STACKS" active={overlays.liqStacks}  color="rgba(255,180,0,1)" onClick={() => toggleOverlay('liqStacks')} />
         <ToggleBtn T={T} label="PRICE" active={showHtfPrice} color={T.sweep}       onClick={() => setShowHtfPrice(v => !v)} />
         <Divider T={T} />
 
@@ -1164,6 +1209,7 @@ function Scanner() {
                     sweeps={htfSweeps}
                     mssEvents={htfMSS.slice(-3)}
                     crtLevel={crtLevel}
+                    liquidityStacks={htfLiqStacks}
                     overlays={overlays}
                     theme={T}
                     height={h}
@@ -1201,6 +1247,7 @@ function Scanner() {
                     sweeps={ltfSweeps}
                     mssEvents={ltfMSS.slice(-3)}
                     crtLevel={crtLevel}
+                    liquidityStacks={ltfLiqStacks}
                     overlays={overlays}
                     theme={T}
                     height={h}
